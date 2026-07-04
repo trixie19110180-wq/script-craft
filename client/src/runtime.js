@@ -341,6 +341,23 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
       const size = Number(sprite.size || 64);
       if (image?.complete && image.naturalWidth) {
         ctx.drawImage(image, -size / 2, -size / 2, size, size);
+      } else if (sprite.shape === "logo") {
+        ctx.fillStyle = "#1565c0";
+        ctx.strokeStyle = "#0f172a";
+        ctx.lineWidth = Math.max(2, size / 28);
+        ctx.beginPath();
+        ctx.roundRect(-size / 2, -size / 2, size, size, size / 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `700 ${Math.max(18, size / 3)}px system-ui`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("</>", 0, -size * 0.08);
+        ctx.font = `800 ${Math.max(14, size / 4.2)}px system-ui`;
+        ctx.fillText("SC", 0, size * 0.24);
+        ctx.textAlign = "start";
+        ctx.textBaseline = "alphabetic";
       } else {
         ctx.fillStyle = sprite.color || "#f97316";
         ctx.strokeStyle = "#111827";

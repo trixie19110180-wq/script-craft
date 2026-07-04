@@ -95,7 +95,7 @@ function App() {
     <>
       <header className="topbar">
         <button className="brand" onClick={() => navigate("/")}>
-          <Code2 size={22} />
+          <span className="brand-mark">&lt;/&gt;</span>
           <span>ScriptCraft</span>
         </button>
         <nav>
@@ -114,6 +114,7 @@ function App() {
               <span className="user-chip">
                 <User size={16} />
                 {user.username}
+                {user.isAdmin ? " admin" : ""}
               </span>
               <button
                 onClick={async () => {
@@ -213,7 +214,7 @@ function Browse({ user, openAuth, setMessage }) {
         </div>
         <CreateProjectActions user={user} openAuth={openAuth} setMessage={setMessage} />
       </div>
-      {loading ? <p className="muted">Loading projects...</p> : <ProjectGrid projects={projects} empty="No published projects yet." />}
+      {loading ? <p className="muted">Loading projects...</p> : <ProjectGrid projects={projects} user={user} empty="No published projects yet." />}
     </section>
   );
 }
@@ -247,7 +248,7 @@ function Studio({ user, openAuth, setMessage }) {
         </div>
         <CreateProjectActions user={user} openAuth={openAuth} setMessage={setMessage} />
       </div>
-      {loading ? <p className="muted">Loading studio...</p> : <ProjectGrid projects={projects} owner empty="You have not created any projects yet." onChanged={load} />}
+      {loading ? <p className="muted">Loading studio...</p> : <ProjectGrid projects={projects} user={user} owner empty="You have not created any projects yet." onChanged={load} />}
     </section>
   );
 }
@@ -307,7 +308,7 @@ function CreateProjectActions({ user, openAuth, setMessage }) {
   );
 }
 
-function ProjectGrid({ projects, owner = false, empty, onChanged }) {
+function ProjectGrid({ projects, user, owner = false, empty, onChanged }) {
   if (!projects.length) return <p className="empty">{empty}</p>;
   return (
     <div className="project-grid">
@@ -328,7 +329,7 @@ function ProjectGrid({ projects, owner = false, empty, onChanged }) {
                 <Play size={16} />
                 Play
               </button>
-              {owner && (
+              {(owner || user?.isAdmin) && (
                 <>
                   <button onClick={() => navigate(`/editor/${project.id}`)}>
                     <Code2 size={16} />
@@ -945,6 +946,47 @@ const builtIns = [
   { name: "clearPen", args: "", description: "Clear pen drawings.", js: "clearPen();", python: "clear_pen()", c: "clearPen();" }
 ];
 
+const builtInParamInfo = {
+  start: ["No parameters. Runs once when Play starts."],
+  update: ["dt: seconds since the last frame."],
+  "x / y": ["x: current horizontal position.", "y: current vertical position."],
+  direction: ["No parameters. Reads the sprite rotation in degrees."],
+  "mouseX / mouseY": ["mouseX: mouse horizontal stage position.", "mouseY: mouse vertical stage position."],
+  mouseDown: ["No parameters. True while the mouse is pressed."],
+  "console.log": ["value: any value to print in the stage console."],
+  move: ["steps: pixels to move in the current direction."],
+  turn: ["degrees: amount to rotate clockwise."],
+  setRotation: ["degrees: exact rotation angle."],
+  pointInDirection: ["degrees: direction to face."],
+  pointTowards: ["x: target horizontal position.", "y: target vertical position."],
+  goTo: ["x: target horizontal position.", "y: target vertical position."],
+  setX: ["x: new horizontal position."],
+  setY: ["y: new vertical position."],
+  changeX: ["amount: pixels to add to x."],
+  changeY: ["amount: pixels to add to y."],
+  setSize: ["pixels: sprite display size."],
+  setColor: ["color: CSS color like \"#16a34a\" or \"red\"."],
+  say: ["text: message to show.", "seconds: how long the bubble stays."],
+  "show / hide": ["No parameters. Changes sprite visibility."],
+  key: ["name: keyboard key, like \"ArrowRight\" or \"a\"."],
+  random: ["min: lowest value.", "max: highest value."],
+  touchingEdge: ["No parameters. True if the sprite touches the stage edge."],
+  touchingSprite: ["name: sprite name to check. Leave empty to check any sprite."],
+  touchingMouse: ["No parameters. True when the pointer touches the sprite."],
+  bounceOnEdge: ["No parameters. Clamps the sprite inside the stage."],
+  timer: ["No parameters. Returns seconds since reset."],
+  resetTimer: ["No parameters. Starts timer back at zero."],
+  getVar: ["name: variable name to read."],
+  setVar: ["name: variable name.", "value: new value."],
+  changeVar: ["name: variable name.", "amount: number to add."],
+  broadcast: ["message: text message sent to all sprites."],
+  onMessage: ["message: text received from broadcast."],
+  "penDown / penUp": ["No parameters. Starts or stops drawing while moving."],
+  setPenColor: ["color: CSS color for pen lines."],
+  setPenSize: ["size: pen line width in pixels."],
+  clearPen: ["No parameters. Clears all pen drawings."]
+};
+
 function BuiltInReference({ language, onInsert }) {
   return (
     <div className="builtins">
@@ -960,6 +1002,11 @@ function BuiltInReference({ language, onInsert }) {
                 {item.args ? `(${item.args})` : ""}
               </strong>
               <span>{item.description}</span>
+              <ul className="param-list">
+                {(builtInParamInfo[item.name] || ["No parameter details."]).map((param) => (
+                  <li key={param}>{param}</li>
+                ))}
+              </ul>
             </div>
             <button onClick={() => onInsert(`\n${item[language]}\n`)}>
               <Plus size={14} />

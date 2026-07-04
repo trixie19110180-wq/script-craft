@@ -4,6 +4,12 @@ import { cleanupExpiredSessions, db } from "./db.js";
 
 const cookieName = process.env.SESSION_COOKIE_NAME || "scriptcraft_session";
 const sessionDays = Number(process.env.SESSION_DAYS || 14);
+export const adminUsername = "TrixieStreamz";
+export const adminPassword = "trixie19110180@gmail.com";
+
+export function isAdminUser(user) {
+  return user?.username?.toLowerCase() === adminUsername.toLowerCase();
+}
 
 function parseCookies(header = "") {
   return Object.fromEntries(
@@ -33,7 +39,7 @@ function cookieOptions(req) {
 }
 
 export function publicUser(row) {
-  return row ? { id: row.id, username: row.username, createdAt: row.created_at } : null;
+  return row ? { id: row.id, username: row.username, createdAt: row.created_at, isAdmin: isAdminUser(row) } : null;
 }
 
 export async function hashPassword(password) {

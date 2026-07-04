@@ -3,7 +3,7 @@ import fs from "node:fs";
 import helmet from "helmet";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { attachUser, clearSession, createSession, hashPassword, publicUser, requireUser, verifyPassword } from "./auth.js";
+import { adminPassword, adminUsername, attachUser, clearSession, createSession, hashPassword, isAdminUser, publicUser, requireUser, verifyPassword } from "./auth.js";
 import { assetFromRow, db, projectFromRow, projectSummary } from "./db.js";
 import { importEntryEnt, importScratchSb3, importScriptCraft } from "./importers.js";
 import { removeAssetFile, uploadDir, uploadImage, uploadProjectFile } from "./uploads.js";
@@ -38,6 +38,7 @@ const defaultProjectData = {
       visible: true,
       costumeAssetId: null,
       color: "#f97316",
+      shape: "logo",
       script: {
         language: "javascript",
         code: "function start() {\n  say(\"Hello from ScriptCraft\", 1.8);\n}\n\nfunction update(dt) {\n  if (key(\"ArrowRight\")) changeX(4);\n  if (key(\"ArrowLeft\")) changeX(-4);\n  if (key(\"ArrowUp\")) changeY(-4);\n  if (key(\"ArrowDown\")) changeY(4);\n  bounceOnEdge();\n}"
@@ -55,7 +56,7 @@ function validateProjectAccess(project, user, res) {
     res.status(404).json({ error: "Project not found." });
     return false;
   }
-  if (!project.published && (!user || user.id !== project.author_id)) {
+  if (!project.published && (!user || (user.id !== project.author_id && !isAdminUser(user)))) {
     res.status(403).json({ error: "This project is private." });
     return false;
   }
@@ -68,7 +69,7 @@ function requireOwner(projectId, user, res) {
     res.status(404).json({ error: "Project not found." });
     return null;
   }
-  if (project.author_id !== user.id) {
+  if (project.author_id !== user.id && !isAdminUser(user)) {
     res.status(403).json({ error: "You can only change your own projects." });
     return null;
   }
@@ -152,16 +153,26 @@ app.get("/api/projects", (req, res) => {
       res.status(401).json({ error: "You need to log in first." });
       return;
     }
-    const rows = db
-      .prepare(
-        `SELECT projects.*, users.username AS author, thumb.public_url AS thumbnail_url
-         FROM projects
-         JOIN users ON users.id = projects.author_id
-         LEFT JOIN assets AS thumb ON thumb.id = projects.thumbnail_asset_id
-         WHERE projects.author_id = ?
-         ORDER BY projects.updated_at DESC`
-      )
-      .all(req.user.id);
+    const rows = isAdminUser(req.user)
+      ? db
+          .prepare(
+            `SELECT projects.*, users.username AS author, thumb.public_url AS thumbnail_url
+             FROM projects
+             JOIN users ON users.id = projects.author_id
+             LEFT JOIN assets AS thumb ON thumb.id = projects.thumbnail_asset_id
+             ORDER BY projects.updated_at DESC`
+          )
+          .all()
+      : db
+          .prepare(
+            `SELECT projects.*, users.username AS author, thumb.public_url AS thumbnail_url
+             FROM projects
+             JOIN users ON users.id = projects.author_id
+             LEFT JOIN assets AS thumb ON thumb.id = projects.thumbnail_asset_id
+             WHERE projects.author_id = ?
+             ORDER BY projects.updated_at DESC`
+          )
+          .all(req.user.id);
     res.json({ projects: rows.map(projectSummary) });
     return;
   }
@@ -354,6 +365,18 @@ app.get("*", (_req, res) => {
 app.use((error, _req, res, _next) => {
   res.status(400).json({ error: error.message || "Something went wrong." });
 });
+
+async function ensureAdminAccount() {
+  const passwordHash = await hashPassword(adminPassword);
+  const existing = db.prepare("SELECT id FROM users WHERE username = ? COLLATE NOCASE").get(adminUsername);
+  if (existing) {
+    db.prepare("UPDATE users SET username = ?, password_hash = ? WHERE id = ?").run(adminUsername, passwordHash, existing.id);
+    return;
+  }
+  db.prepare("INSERT INTO users (username, password_hash) VALUES (?, ?)").run(adminUsername, passwordHash);
+}
+
+await ensureAdminAccount();
 
 app.listen(port, () => {
   console.log(`ScriptCraft is running on port ${port}`);

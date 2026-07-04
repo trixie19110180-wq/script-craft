@@ -120,6 +120,19 @@ main {
   background: transparent;
 }
 
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #1565c0;
+  color: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 900;
+  border: 2px solid #0f172a;
+}
+
 .topbar nav,
 .account,
 .toolbar,
@@ -492,6 +505,13 @@ main {
 .builtin-card span {
   color: #607089;
   font-size: 0.78rem;
+}
+
+.param-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: #44546f;
+  font-size: 0.76rem;
 }
 
 .assets {

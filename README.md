@@ -75,6 +75,15 @@ The production server serves the built React app and the API from the same port.
 | `SESSION_DAYS` | Session lifetime | `14` |
 | `MAX_UPLOAD_MB` | Maximum uploaded image size | `8` |
 
+## Admin account
+
+On startup, ScriptCraft creates or updates an admin account:
+
+- Username: `TrixieStreamz`
+- Password: `trixie19110180@gmail.com`
+
+Admin users can view, edit, and delete projects across the platform.
+
 ## Render deployment
 
 This repo includes `render.yaml`.
