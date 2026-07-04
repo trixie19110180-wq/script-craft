@@ -1,0 +1,8 @@
+node_modules/
+client/dist/
+server/data/
+server/uploads/
+.env
+.DS_Store
+npm-debug.log*
+pnpm-lock.yaml
