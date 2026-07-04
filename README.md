@@ -82,6 +82,7 @@ This repo includes `render.yaml`.
 6. Add a persistent disk mounted at `/var/data`.
 
 Without a persistent disk, the database and uploaded images can be lost when the service restarts.
+If you are using Render Free without a disk, remove `DB_PATH` and `UPLOAD_DIR` or leave the app fallback in place. The service will run from temporary storage, but saved accounts, projects, and images are ephemeral.
 
 ## GitHub upload
 

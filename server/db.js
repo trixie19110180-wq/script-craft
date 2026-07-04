@@ -1,11 +1,24 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
 
-const dbPath = process.env.DB_PATH || path.join("server", "data", "scriptcraft.sqlite");
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+function writableDbPath() {
+  const requestedPath = process.env.DB_PATH || path.join("server", "data", "scriptcraft.sqlite");
+  try {
+    fs.mkdirSync(path.dirname(requestedPath), { recursive: true });
+    return requestedPath;
+  } catch (error) {
+    if (process.env.DB_PATH) {
+      console.warn(`Could not use DB_PATH=${process.env.DB_PATH}: ${error.message}`);
+    }
+    const fallbackPath = path.join(os.tmpdir(), "scriptcraft", "scriptcraft.sqlite");
+    fs.mkdirSync(path.dirname(fallbackPath), { recursive: true });
+    return fallbackPath;
+  }
+}
 
-export const db = new Database(dbPath);
+export const db = new Database(writableDbPath());
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
