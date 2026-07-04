@@ -261,7 +261,7 @@ main {
 .editor {
   height: calc(100vh - 64px);
   display: grid;
-  grid-template-columns: 280px minmax(460px, 1fr) 360px;
+  grid-template-columns: 270px minmax(480px, 1fr) minmax(430px, 560px);
   gap: 14px;
   padding: 14px;
 }
@@ -284,9 +284,7 @@ main {
 
 .stage-column {
   min-width: 0;
-  display: grid;
-  grid-template-rows: auto minmax(220px, 1fr);
-  gap: 14px;
+  display: block;
 }
 
 .stage-wrap {
@@ -295,13 +293,101 @@ main {
   gap: 12px;
 }
 
+.editor-sidebar .toolbar {
+  flex-wrap: wrap;
+}
+
+.sidebar-project {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dbe3ef;
+}
+
+.sidebar-project strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-project span,
+.inline-status {
+  color: #607089;
+  font-size: 0.82rem;
+}
+
+.work-panel {
+  min-width: 0;
+}
+
+.editor-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.editor-tabs button,
+.tool-modes button {
+  min-width: 0;
+}
+
+.editor-tabs .active {
+  background: #d9efe8;
+  border-color: #7ca994;
+}
+
+.settings-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.sprite-preview {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f9fbff;
+}
+
+.sprite-preview > img,
+.sprite-preview > span {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  border: 1px solid #dbe3ef;
+  object-fit: cover;
+}
+
+.sprite-preview > span {
+  display: grid;
+  place-items: center;
+  background: #1565c0;
+  color: #ffffff;
+  font-weight: 900;
+}
+
+.sprite-preview strong,
+.sprite-preview div span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sprite-preview div span {
+  display: block;
+  color: #607089;
+  font-size: 0.85rem;
+}
+
 .stage-top {
   justify-content: space-between;
 }
 
 .stage-wrap canvas {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: auto;
   background: #eef3ff;
   border: 1px solid #aebbd0;
   border-radius: 8px;
@@ -379,6 +465,11 @@ main {
 .sprite-row.selected button:first-child {
   border-color: #1565c0;
   box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.15);
+}
+
+.sprite-row.stage-target {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dbe3ef;
 }
 
 .icon {
@@ -521,6 +612,12 @@ main {
   gap: 12px;
 }
 
+.work-panel .assets {
+  border: 0;
+  padding: 0;
+  overflow: visible;
+}
+
 .asset-tools {
   align-items: stretch;
   flex-wrap: wrap;
@@ -581,6 +678,10 @@ main {
 
 .drawing-actions {
   flex-wrap: wrap;
+}
+
+.tool-modes {
+  flex: 0 0 auto;
 }
 
 .drawing-actions input[type="range"] {

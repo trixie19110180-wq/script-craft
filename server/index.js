@@ -25,23 +25,31 @@ app.use(attachUser);
 app.use("/uploads", express.static(uploadDir, { fallthrough: false, maxAge: "7d" }));
 
 const defaultProjectData = {
-  stage: { width: 640, height: 360, backgroundColor: "#eef3ff", backgroundAssetId: null },
+  stage: {
+    width: 480,
+    height: 360,
+    backgroundColor: "#eef3ff",
+    backgroundAssetId: null,
+    script: {
+      language: "javascript",
+      code: "function start() {\n  console.log(\"Background ready\");\n}\n\nfunction update(dt) {\n}"
+    }
+  },
   variables: [],
   sprites: [
     {
       id: "sprite-1",
       name: "Sprite 1",
-      x: 120,
-      y: 160,
+      x: 240,
+      y: 180,
       size: 72,
       rotation: 0,
       visible: true,
       costumeAssetId: null,
-      color: "#f97316",
       shape: "logo",
       script: {
         language: "javascript",
-        code: "function start() {\n  say(\"Hello from ScriptCraft\", 1.8);\n}\n\nfunction update(dt) {\n  if (key(\"ArrowRight\")) changeX(4);\n  if (key(\"ArrowLeft\")) changeX(-4);\n  if (key(\"ArrowUp\")) changeY(-4);\n  if (key(\"ArrowDown\")) changeY(4);\n  bounceOnEdge();\n}"
+        code: "function start() {\n  say(\"Hello from ScriptCraft\", 1800);\n}\n\nfunction update(dt) {\n  if (key(\"ArrowRight\")) changeX(4);\n  if (key(\"ArrowLeft\")) changeX(-4);\n  if (key(\"ArrowUp\")) changeY(4);\n  if (key(\"ArrowDown\")) changeY(-4);\n  bounceOnEdge();\n}"
       }
     }
   ]

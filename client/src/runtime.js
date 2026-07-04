@@ -1,10 +1,16 @@
 export const defaultScripts = {
   javascript:
-    "function start() {\n  say(\"Ready\", 1);\n}\n\nfunction update(dt) {\n  if (key(\"ArrowRight\")) changeX(4);\n  if (key(\"ArrowLeft\")) changeX(-4);\n  if (key(\"ArrowUp\")) changeY(-4);\n  if (key(\"ArrowDown\")) changeY(4);\n  bounceOnEdge();\n}",
+    "function start() {\n  say(\"Ready\", 1000);\n}\n\nfunction update(dt) {\n  if (key(\"ArrowRight\")) changeX(4);\n  if (key(\"ArrowLeft\")) changeX(-4);\n  if (key(\"ArrowUp\")) changeY(4);\n  if (key(\"ArrowDown\")) changeY(-4);\n  bounceOnEdge();\n}",
   python:
-    "def start():\n    say(\"Ready\", 1)\n\ndef update(dt):\n    if key(\"ArrowRight\"):\n        change_x(4)\n    if key(\"ArrowLeft\"):\n        change_x(-4)\n    if key(\"ArrowUp\"):\n        change_y(-4)\n    if key(\"ArrowDown\"):\n        change_y(4)\n    bounce_on_edge()",
+    "def start():\n    say(\"Ready\", 1000)\n\ndef update(dt):\n    if key(\"ArrowRight\"):\n        change_x(4)\n    if key(\"ArrowLeft\"):\n        change_x(-4)\n    if key(\"ArrowUp\"):\n        change_y(4)\n    if key(\"ArrowDown\"):\n        change_y(-4)\n    bounce_on_edge()",
   c:
-    "void start() {\n  say(\"Ready\", 1);\n}\n\nvoid update(float dt) {\n  if (key(\"ArrowRight\")) changeX(4);\n  if (key(\"ArrowLeft\")) changeX(-4);\n  if (key(\"ArrowUp\")) changeY(-4);\n  if (key(\"ArrowDown\")) changeY(4);\n  bounceOnEdge();\n}"
+    "void start() {\n  say(\"Ready\", 1000);\n}\n\nvoid update(float dt) {\n  if (key(\"ArrowRight\")) changeX(4);\n  if (key(\"ArrowLeft\")) changeX(-4);\n  if (key(\"ArrowUp\")) changeY(4);\n  if (key(\"ArrowDown\")) changeY(-4);\n  bounceOnEdge();\n}"
+};
+
+export const defaultBackgroundScripts = {
+  javascript: "function start() {\n  console.log(\"Background ready\");\n}\n\nfunction update(dt) {\n}",
+  python: "def start():\n    log(\"Background ready\")\n\ndef update(dt):\n    pass",
+  c: "void start() {\n  log(\"Background ready\");\n}\n\nvoid update(float dt) {\n}"
 };
 
 const keys = new Set();
@@ -27,6 +33,7 @@ function transpilePython(code) {
     if (!raw.trim() || raw.trim().startsWith("#")) continue;
     const indent = raw.match(/^ */)[0].length;
     let line = raw.trim();
+    if (line === "pass") continue;
     closeTo(indent);
     line = line
       .replace(/\bTrue\b/g, "true")
@@ -55,6 +62,7 @@ function transpilePython(code) {
       .replace(/\bpen_up\b/g, "penUp")
       .replace(/\bset_pen_color\b/g, "setPenColor")
       .replace(/\bset_pen_size\b/g, "setPenSize")
+      .replace(/\bset_background_color\b/g, "setBackgroundColor")
       .replace(/\bon_message\b/g, "onMessage")
       .replace(/\bbounce_on_edge\b/g, "bounceOnEdge")
       .replace(/\btouching_edge\b/g, "touchingEdge");
@@ -87,27 +95,36 @@ function transpileC(code) {
     .replace(/\bfalse\b/g, "false");
 }
 
+const compiledScripts = new Map();
+
 function compile(script) {
+  const cacheKey = `${script.language}:${script.code}`;
+  if (compiledScripts.has(cacheKey)) return compiledScripts.get(cacheKey);
   const source =
     script.language === "python" ? transpilePython(script.code) : script.language === "c" ? transpileC(script.code) : script.code;
-  return new Function(
+  const factory = new Function(
     "api",
     `
-      const move = (...args) => api.move(...args);
-      const turn = (...args) => api.turn(...args);
-      const setRotation = (...args) => api.setRotation(...args);
-      const pointInDirection = (...args) => api.pointInDirection(...args);
-      const pointTowards = (...args) => api.pointTowards(...args);
-      const goTo = (...args) => api.goTo(...args);
-      const setX = (...args) => api.setX(...args);
-      const setY = (...args) => api.setY(...args);
-      const changeX = (...args) => api.changeX(...args);
-      const changeY = (...args) => api.changeY(...args);
-      const setSize = (...args) => api.setSize(...args);
-      const setColor = (...args) => api.setColor(...args);
+      const __mutate = (fn, args) => {
+        const result = fn(...args);
+        __syncBuiltIns();
+        return result;
+      };
+      const move = (...args) => __mutate(api.move, args);
+      const turn = (...args) => __mutate(api.turn, args);
+      const setRotation = (...args) => __mutate(api.setRotation, args);
+      const pointInDirection = (...args) => __mutate(api.pointInDirection, args);
+      const pointTowards = (...args) => __mutate(api.pointTowards, args);
+      const goTo = (...args) => __mutate(api.goTo, args);
+      const setX = (...args) => __mutate(api.setX, args);
+      const setY = (...args) => __mutate(api.setY, args);
+      const changeX = (...args) => __mutate(api.changeX, args);
+      const changeY = (...args) => __mutate(api.changeY, args);
+      const setSize = (...args) => __mutate(api.setSize, args);
+      const setColor = (...args) => __mutate(api.setColor, args);
       const say = (...args) => api.say(...args);
-      const show = (...args) => api.show(...args);
-      const hide = (...args) => api.hide(...args);
+      const show = (...args) => __mutate(api.show, args);
+      const hide = (...args) => __mutate(api.hide, args);
       const key = (...args) => api.key(...args);
       const log = (...args) => api.log(...args);
       const random = (...args) => api.random(...args);
@@ -125,8 +142,9 @@ function compile(script) {
       const setPenColor = (...args) => api.setPenColor(...args);
       const setPenSize = (...args) => api.setPenSize(...args);
       const clearPen = (...args) => api.clearPen(...args);
+      const setBackgroundColor = (...args) => __mutate(api.setBackgroundColor, args);
       const touchingEdge = (...args) => api.touchingEdge(...args);
-      const bounceOnEdge = (...args) => api.bounceOnEdge(...args);
+      const bounceOnEdge = (...args) => __mutate(api.bounceOnEdge, args);
       const console = api.console;
       let x = api.x;
       let y = api.y;
@@ -134,6 +152,7 @@ function compile(script) {
       let mouseX = api.mouseX;
       let mouseY = api.mouseY;
       let mouseDown = api.mouseDown;
+      let backgroundColor = api.backgroundColor;
       const __syncBuiltIns = () => {
         x = api.x;
         y = api.y;
@@ -141,6 +160,7 @@ function compile(script) {
         mouseX = api.mouseX;
         mouseY = api.mouseY;
         mouseDown = api.mouseDown;
+        backgroundColor = api.backgroundColor;
       };
       ${source}
       const __start = typeof start === "function" ? start : null;
@@ -162,6 +182,9 @@ function compile(script) {
       };
     `
   );
+  compiledScripts.set(cacheKey, factory);
+  if (compiledScripts.size > 80) compiledScripts.delete(compiledScripts.keys().next().value);
+  return factory;
 }
 
 function formatLogValue(value) {
@@ -178,6 +201,10 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
   const ctx = canvas.getContext("2d");
   let data = structuredClone(initialData);
   data.variables ||= [];
+  data.stage.script ||= {
+    language: "javascript",
+    code: defaultBackgroundScripts.javascript
+  };
   let raf = null;
   let last = performance.now();
   let timerStart = performance.now();
@@ -206,6 +233,11 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerdown", onPointerDown);
   window.addEventListener("pointerup", onPointerUp);
+
+  const canvasToStageX = (x) => Number(x || 0) - data.stage.width / 2;
+  const canvasToStageY = (y) => data.stage.height / 2 - Number(y || 0);
+  const stageToCanvasX = (x) => data.stage.width / 2 + Number(x || 0);
+  const stageToCanvasY = (y) => data.stage.height / 2 - Number(y || 0);
 
   function imageFor(assetId) {
     if (!assetId || !assets[assetId]) return null;
@@ -240,22 +272,25 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
   function makeApi(sprite) {
     return {
       get x() {
-        return sprite.x;
+        return canvasToStageX(sprite.x);
       },
       get y() {
-        return sprite.y;
+        return canvasToStageY(sprite.y);
       },
       get direction() {
         return sprite.rotation;
       },
       get mouseX() {
-        return mouse.x;
+        return canvasToStageX(mouse.x);
       },
       get mouseY() {
-        return mouse.y;
+        return canvasToStageY(mouse.y);
       },
       get mouseDown() {
         return mouse.down;
+      },
+      get backgroundColor() {
+        return data.stage.backgroundColor;
       },
       move(steps) {
         const radians = (sprite.rotation * Math.PI) / 180;
@@ -271,22 +306,22 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
         sprite.rotation = Number(degrees || 0);
       },
       pointTowards(x, y) {
-        sprite.rotation = (Math.atan2(Number(y || 0) - sprite.y, Number(x || 0) - sprite.x) * 180) / Math.PI;
+        sprite.rotation = (Math.atan2(stageToCanvasY(y) - sprite.y, stageToCanvasX(x) - sprite.x) * 180) / Math.PI;
       },
       goTo(x, y) {
-        placeSprite(sprite, x, y);
+        placeSprite(sprite, stageToCanvasX(x), stageToCanvasY(y));
       },
       setX(x) {
-        placeSprite(sprite, x, sprite.y);
+        placeSprite(sprite, stageToCanvasX(x), sprite.y);
       },
       setY(y) {
-        placeSprite(sprite, sprite.x, y);
+        placeSprite(sprite, sprite.x, stageToCanvasY(y));
       },
       changeX(dx) {
         placeSprite(sprite, sprite.x + Number(dx || 0), sprite.y);
       },
       changeY(dy) {
-        placeSprite(sprite, sprite.x, sprite.y + Number(dy || 0));
+        placeSprite(sprite, sprite.x, sprite.y - Number(dy || 0));
       },
       setSize(size) {
         sprite.size = Math.max(8, Number(size || sprite.size));
@@ -294,8 +329,8 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
       setColor(color) {
         sprite.color = String(color || sprite.color);
       },
-      say(text, seconds = 1.5) {
-        speech.set(sprite.id, { text: String(text), until: performance.now() + Number(seconds) * 1000 });
+      say(text, milliseconds = 1500) {
+        speech.set(sprite.id, { text: String(text), until: performance.now() + Number(milliseconds) });
       },
       show() {
         sprite.visible = true;
@@ -318,13 +353,13 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
         return Number(min) + Math.random() * (Number(max) - Number(min));
       },
       timer() {
-        return (performance.now() - timerStart) / 1000;
+        return performance.now() - timerStart;
       },
       resetTimer() {
         timerStart = performance.now();
       },
       distanceTo(x, y) {
-        return Math.hypot(Number(x || 0) - sprite.x, Number(y || 0) - sprite.y);
+        return Math.hypot(Number(x || 0) - canvasToStageX(sprite.x), Number(y || 0) - canvasToStageY(sprite.y));
       },
       touchingSprite(name) {
         return data.sprites.some((other) => {
@@ -353,7 +388,7 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
           try {
             item.program.onMessage?.(String(message));
           } catch (error) {
-            hooks.onError?.(`${item.sprite.name}: ${error.message}`);
+            hooks.onError?.(`${item.target.name}: ${error.message}`);
           }
         }
       },
@@ -372,13 +407,127 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
       clearPen() {
         penCtx.clearRect(0, 0, penCanvas.width, penCanvas.height);
       },
+      setBackgroundColor(color) {
+        data.stage.backgroundColor = String(color || data.stage.backgroundColor || "#eef3ff");
+      },
       touchingEdge() {
-        return sprite.x < 0 || sprite.y < 0 || sprite.x > data.stage.width || sprite.y > data.stage.height;
+        const edgeX = data.stage.width / 2;
+        const edgeY = data.stage.height / 2;
+        const currentX = canvasToStageX(sprite.x);
+        const currentY = canvasToStageY(sprite.y);
+        return currentX <= -edgeX || currentX >= edgeX || currentY <= -edgeY || currentY >= edgeY;
       },
       bounceOnEdge() {
         sprite.x = Math.max(0, Math.min(data.stage.width, sprite.x));
         sprite.y = Math.max(0, Math.min(data.stage.height, sprite.y));
       }
+    };
+  }
+
+  function makeStageApi() {
+    return {
+      get x() {
+        return 0;
+      },
+      get y() {
+        return 0;
+      },
+      get direction() {
+        return 0;
+      },
+      get mouseX() {
+        return canvasToStageX(mouse.x);
+      },
+      get mouseY() {
+        return canvasToStageY(mouse.y);
+      },
+      get mouseDown() {
+        return mouse.down;
+      },
+      get backgroundColor() {
+        return data.stage.backgroundColor;
+      },
+      move() {},
+      turn() {},
+      setRotation() {},
+      pointInDirection() {},
+      pointTowards() {},
+      goTo() {},
+      setX() {},
+      setY() {},
+      changeX() {},
+      changeY() {},
+      setSize() {},
+      setColor() {},
+      say(text) {
+        hooks.onLog?.(`[background] ${formatLogValue(text)}`);
+      },
+      show() {},
+      hide() {},
+      key(name) {
+        return keys.has(name);
+      },
+      console: {
+        log(...values) {
+          hooks.onLog?.(values.map(formatLogValue).join(" "));
+        }
+      },
+      log(...values) {
+        hooks.onLog?.(values.map(formatLogValue).join(" "));
+      },
+      random(min, max) {
+        return Number(min) + Math.random() * (Number(max) - Number(min));
+      },
+      timer() {
+        return performance.now() - timerStart;
+      },
+      resetTimer() {
+        timerStart = performance.now();
+      },
+      distanceTo(x, y) {
+        return Math.hypot(Number(x || 0), Number(y || 0));
+      },
+      touchingSprite() {
+        return false;
+      },
+      touchingMouse() {
+        return false;
+      },
+      getVar(name) {
+        return data.variables.find((item) => item.name === name)?.value ?? 0;
+      },
+      setVar(name, value) {
+        const variable = data.variables.find((item) => item.name === name);
+        if (variable) variable.value = value;
+        else data.variables.push({ id: `var-${Date.now()}`, name: String(name), value });
+      },
+      changeVar(name, amount) {
+        const current = Number(this.getVar(name) || 0);
+        this.setVar(name, current + Number(amount || 0));
+      },
+      broadcast(message) {
+        for (const item of programs) {
+          try {
+            item.program.onMessage?.(String(message));
+          } catch (error) {
+            hooks.onError?.(`${item.target.name}: ${error.message}`);
+          }
+        }
+      },
+      penDown() {},
+      penUp() {},
+      setPenColor() {},
+      setPenSize() {},
+      clearPen() {
+        penCtx.clearRect(0, 0, penCanvas.width, penCanvas.height);
+      },
+      setBackgroundColor(color) {
+        data.stage.backgroundColor = String(color || data.stage.backgroundColor || "#eef3ff");
+      },
+      touchingEdge() {
+        return false;
+      },
+      bounceOnEdge() {}
     };
   }
 
@@ -467,11 +616,19 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
 
   function buildPrograms() {
     programs = [];
+    const stageTarget = { id: "__stage__", name: "Background" };
+    try {
+      const factory = compile(data.stage.script);
+      const api = makeStageApi();
+      programs.push({ target: stageTarget, api, program: factory(api) });
+    } catch (error) {
+      hooks.onError?.(`Background: ${error.message}`);
+    }
     for (const sprite of data.sprites) {
       try {
         const factory = compile(sprite.script);
         const api = makeApi(sprite);
-        programs.push({ sprite, api, program: factory(api) });
+        programs.push({ target: sprite, api, program: factory(api) });
       } catch (error) {
         hooks.onError?.(`${sprite.name}: ${error.message}`);
       }
@@ -479,19 +636,18 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
   }
 
   function tick(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = Math.min(50, now - last);
     last = now;
     for (const item of programs) {
       try {
         item.program.update?.(dt);
       } catch (error) {
-        hooks.onError?.(`${item.sprite.name}: ${error.message}`);
+        hooks.onError?.(`${item.target.name}: ${error.message}`);
         stop();
         return;
       }
     }
     draw();
-    hooks.onData?.(structuredClone(data));
     raf = requestAnimationFrame(tick);
   }
 
@@ -502,7 +658,7 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
       try {
         item.program.start?.();
       } catch (error) {
-        hooks.onError?.(`${item.sprite.name}: ${error.message}`);
+        hooks.onError?.(`${item.target.name}: ${error.message}`);
       }
     }
     last = performance.now();

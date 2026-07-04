@@ -5,15 +5,18 @@ import {
   ArrowDown,
   ArrowUp,
   Camera,
+  Circle,
   Code2,
   Copy,
   Download,
+  Eraser,
   Eye,
   FolderOpen,
   Image,
   LogIn,
   LogOut,
   Maximize2,
+  Minus,
   Minimize2,
   Pause,
   Play,
@@ -25,7 +28,7 @@ import {
   User
 } from "lucide-react";
 import { convertScript, downloadProjectFile } from "./projectFiles.js";
-import { createRuntime, defaultScripts } from "./runtime.js";
+import { createRuntime, defaultBackgroundScripts, defaultScripts } from "./runtime.js";
 import "./styles.css";
 
 const api = {
@@ -53,6 +56,18 @@ const api = {
   uploadAsset: (id, form) => api.request(`/api/projects/${id}/assets`, { method: "POST", body: form }),
   deleteAsset: (projectId, assetId) => api.request(`/api/projects/${projectId}/assets/${assetId}`, { method: "DELETE" })
 };
+
+function normalizeProject(project) {
+  const next = structuredClone(project);
+  next.data.stage ||= {};
+  next.data.stage.script ||= {
+    language: "javascript",
+    code: defaultBackgroundScripts.javascript
+  };
+  next.data.variables ||= [];
+  next.data.sprites ||= [];
+  return next;
+}
 
 function navigate(path) {
   window.history.pushState({}, "", path);
@@ -360,7 +375,7 @@ function ProjectViewer({ id, user, setMessage }) {
   const [project, setProject] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    api.project(id).then((data) => setProject(data.project)).catch((err) => setError(err.message));
+    api.project(id).then((data) => setProject(normalizeProject(data.project))).catch((err) => setError(err.message));
   }, [id]);
 
   if (error) return <section className="page-shell"><p className="error">{error}</p></section>;
@@ -416,17 +431,20 @@ function Editor({ id, user, setMessage }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [activePane, setActivePane] = useState("code");
 
   useEffect(() => {
     api.project(id)
       .then((data) => {
-        setProject(data.project);
+        const normalized = normalizeProject(data.project);
+        setProject(normalized);
         setSelectedSpriteId(data.project.data.sprites[0]?.id || "");
       })
       .catch((err) => setError(err.message));
   }, [id]);
 
-  const selectedSprite = project?.data.sprites.find((sprite) => sprite.id === selectedSpriteId);
+  const selectedSprite = selectedSpriteId === "__stage__" ? null : project?.data.sprites.find((sprite) => sprite.id === selectedSpriteId);
+  const selectedBackground = selectedSpriteId === "__stage__";
   const backgroundAssets = project?.assets.filter((asset) => asset.kind === "background") || [];
   const thumbnailAssets = project?.assets.filter((asset) => asset.kind === "thumbnail") || [];
   const currentThumbnail = project?.assets.find((asset) => asset.id === project.thumbnailAssetId);
@@ -452,7 +470,7 @@ function Editor({ id, user, setMessage }) {
         thumbnailAssetId: project.thumbnailAssetId,
         ...overrides
       });
-      setProject(data.project);
+      setProject(normalizeProject(data.project));
       setDirty(false);
       if (!options.silent) setMessage("Saved.");
     } catch (err) {
@@ -478,103 +496,11 @@ function Editor({ id, user, setMessage }) {
 
   return (
     <section className="editor">
-      <aside className="panel project-panel">
-        <label>
-          Title
-          <input value={project.title} onChange={(event) => updateProject((draft) => (draft.title = event.target.value))} />
-        </label>
-        <label>
-          Description
-          <textarea rows="4" value={project.description} onChange={(event) => updateProject((draft) => (draft.description = event.target.value))} />
-        </label>
-        <label>
-          Visibility
-          <select value={project.published ? "published" : "draft"} onChange={(event) => updateProject((draft) => (draft.published = event.target.value === "published"))}>
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
-          </select>
-        </label>
-        <div className="grid-two">
-          <label>
-            Stage width
-            <input
-              type="number"
-              min="240"
-              max="1280"
-              value={project.data.stage.width}
-              onChange={(event) => updateProject((draft) => (draft.data.stage.width = Number(event.target.value) || 640))}
-            />
-          </label>
-          <label>
-            Stage height
-            <input
-              type="number"
-              min="180"
-              max="720"
-              value={project.data.stage.height}
-              onChange={(event) => updateProject((draft) => (draft.data.stage.height = Number(event.target.value) || 360))}
-            />
-          </label>
+      <aside className="panel editor-sidebar">
+        <div className="sidebar-project">
+          <strong>{project.title}</strong>
+          <span>{dirty ? "Unsaved edits" : project.published ? "Published" : "Draft"}</span>
         </div>
-        <label>
-          Stage color
-          <input
-            type="color"
-            value={project.data.stage.backgroundColor}
-            onChange={(event) => updateProject((draft) => (draft.data.stage.backgroundColor = event.target.value))}
-          />
-        </label>
-        <label>
-          Background image
-          <select value={project.data.stage.backgroundAssetId || ""} onChange={(event) => updateProject((draft) => (draft.data.stage.backgroundAssetId = Number(event.target.value) || null))}>
-            <option value="">Stage color only</option>
-            {backgroundAssets.map((asset) => (
-              <option value={asset.id} key={asset.id}>
-                {asset.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Project thumbnail
-          <select value={project.thumbnailAssetId || ""} onChange={(event) => updateProject((draft) => (draft.thumbnailAssetId = Number(event.target.value) || null))}>
-            <option value="">No thumbnail</option>
-            {thumbnailAssets.map((asset) => (
-              <option value={asset.id} key={asset.id}>
-                {asset.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="thumbnail-preview">
-          {currentThumbnail ? <img src={currentThumbnail.url} alt="" /> : <span>{project.title.slice(0, 1).toUpperCase()}</span>}
-        </div>
-        <dl className="project-facts">
-          <div>
-            <dt>Author</dt>
-            <dd>{project.author}</dd>
-          </div>
-          <div>
-            <dt>Status</dt>
-            <dd>{project.published ? "Published" : "Draft"}</dd>
-          </div>
-          <div>
-            <dt>Sprites</dt>
-            <dd>{project.data.sprites.length}</dd>
-          </div>
-          <div>
-            <dt>Assets</dt>
-            <dd>{project.assets.length}</dd>
-          </div>
-          <div>
-            <dt>Created</dt>
-            <dd>{new Date(project.createdAt).toLocaleDateString()}</dd>
-          </div>
-          <div>
-            <dt>Updated</dt>
-            <dd>{new Date(project.updatedAt).toLocaleDateString()}</dd>
-          </div>
-        </dl>
         <div className="toolbar">
           <button className="primary" onClick={() => save()} disabled={saving}>
             <Save size={17} />
@@ -614,26 +540,33 @@ function Editor({ id, user, setMessage }) {
             Export
           </button>
         </div>
-
         <SpriteList
           sprites={project.data.sprites}
           selectedSpriteId={selectedSpriteId}
-          onSelect={setSelectedSpriteId}
+          selectedBackground={selectedBackground}
+          onSelectBackground={() => {
+            setSelectedSpriteId("__stage__");
+            setActivePane("code");
+          }}
+          onSelect={(spriteId) => {
+            setSelectedSpriteId(spriteId);
+            setActivePane("code");
+          }}
           onAdd={() => {
             const sprite = {
               id: `sprite-${Date.now()}`,
               name: `Sprite ${project.data.sprites.length + 1}`,
-              x: 160,
-              y: 140,
+              x: project.data.stage.width / 2,
+              y: project.data.stage.height / 2,
               size: 64,
               rotation: 0,
               visible: true,
               costumeAssetId: null,
-              color: "#16a34a",
               script: { language: "javascript", code: defaultScripts.javascript }
             };
             updateProject((draft) => draft.data.sprites.push(sprite));
             setSelectedSpriteId(sprite.id);
+            setActivePane("sprite");
           }}
           onDelete={(spriteId) => {
             if (project.data.sprites.length === 1) return;
@@ -668,36 +601,182 @@ function Editor({ id, user, setMessage }) {
 
       <section className="stage-column">
         <Stage project={project} editable selectedSpriteId={selectedSpriteId} onProjectChange={setProject} showControls setMessage={setMessage} />
-        <AssetPanel
-          project={project}
-          assetKind={assetKind}
-          setAssetKind={setAssetKind}
-          onUploaded={(nextProject) => setProject(nextProject)}
-          onApply={(asset) => {
-            updateProject((draft) => {
-              if (asset.kind === "background") draft.data.stage.backgroundAssetId = asset.id;
-              if (asset.kind === "thumbnail") draft.thumbnailAssetId = asset.id;
-              if (["sprite", "costume"].includes(asset.kind) && selectedSprite) {
-                draft.data.sprites.find((sprite) => sprite.id === selectedSprite.id).costumeAssetId = asset.id;
-              }
-            });
-          }}
-          setMessage={setMessage}
-        />
       </section>
 
-      <aside className="panel code-panel">
-        {selectedSprite ? (
-          <SpriteInspector sprite={selectedSprite} project={project} updateProject={updateProject} />
-        ) : (
-          <p className="muted">Select a sprite.</p>
+      <aside className="panel work-panel">
+        <div className="editor-tabs">
+          {[
+            ["code", "Code"],
+            ["sprite", "Sprite"],
+            ["assets", "Assets"],
+            ["project", "Project"]
+          ].map(([key, label]) => (
+            <button key={key} className={activePane === key ? "active" : ""} onClick={() => setActivePane(key)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {activePane === "code" &&
+          (selectedBackground ? (
+            <BackgroundInspector project={project} updateProject={updateProject} setMessage={setMessage} />
+          ) : selectedSprite ? (
+            <SpriteInspector mode="code" sprite={selectedSprite} project={project} updateProject={updateProject} setMessage={setMessage} />
+          ) : (
+            <p className="muted">Select a sprite.</p>
+          ))}
+        {activePane === "sprite" &&
+          (selectedBackground ? (
+            <ProjectSettings
+              project={project}
+              backgroundAssets={backgroundAssets}
+              thumbnailAssets={thumbnailAssets}
+              currentThumbnail={currentThumbnail}
+              updateProject={updateProject}
+            />
+          ) : selectedSprite ? (
+            <SpriteInspector mode="sprite" sprite={selectedSprite} project={project} updateProject={updateProject} setMessage={setMessage} />
+          ) : (
+            <p className="muted">Select a sprite.</p>
+          ))}
+        {activePane === "assets" && (
+          <AssetPanel
+            project={project}
+            assetKind={assetKind}
+            setAssetKind={setAssetKind}
+            onUploaded={(nextProject) => setProject(normalizeProject(nextProject))}
+            onApply={(asset) => {
+              updateProject((draft) => {
+                if (asset.kind === "background") draft.data.stage.backgroundAssetId = asset.id;
+                if (asset.kind === "thumbnail") draft.thumbnailAssetId = asset.id;
+                if (["sprite", "costume"].includes(asset.kind) && selectedSprite) {
+                  draft.data.sprites.find((sprite) => sprite.id === selectedSprite.id).costumeAssetId = asset.id;
+                }
+              });
+            }}
+            setMessage={setMessage}
+          />
+        )}
+        {activePane === "project" && (
+          <ProjectSettings
+            project={project}
+            backgroundAssets={backgroundAssets}
+            thumbnailAssets={thumbnailAssets}
+            currentThumbnail={currentThumbnail}
+            updateProject={updateProject}
+          />
         )}
       </aside>
     </section>
   );
 }
 
-function SpriteList({ sprites, selectedSpriteId, onSelect, onAdd, onDelete, onDuplicate, onMove }) {
+function ProjectSettings({ project, backgroundAssets, thumbnailAssets, currentThumbnail, updateProject }) {
+  return (
+    <div className="settings-stack">
+      <div className="section-row">
+        <h2>Project Settings</h2>
+      </div>
+      <label>
+        Title
+        <input value={project.title} onChange={(event) => updateProject((draft) => (draft.title = event.target.value))} />
+      </label>
+      <label>
+        Description
+        <textarea rows="4" value={project.description} onChange={(event) => updateProject((draft) => (draft.description = event.target.value))} />
+      </label>
+      <label>
+        Visibility
+        <select value={project.published ? "published" : "draft"} onChange={(event) => updateProject((draft) => (draft.published = event.target.value === "published"))}>
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+        </select>
+      </label>
+      <div className="grid-two">
+        <label>
+          Stage width
+          <input
+            type="number"
+            min="240"
+            max="1280"
+            value={project.data.stage.width}
+            onChange={(event) => updateProject((draft) => (draft.data.stage.width = Number(event.target.value) || 480))}
+          />
+        </label>
+        <label>
+          Stage height
+          <input
+            type="number"
+            min="180"
+            max="720"
+            value={project.data.stage.height}
+            onChange={(event) => updateProject((draft) => (draft.data.stage.height = Number(event.target.value) || 360))}
+          />
+        </label>
+      </div>
+      <label>
+        Stage color
+        <input
+          type="color"
+          value={project.data.stage.backgroundColor}
+          onChange={(event) => updateProject((draft) => (draft.data.stage.backgroundColor = event.target.value))}
+        />
+      </label>
+      <label>
+        Background image
+        <select value={project.data.stage.backgroundAssetId || ""} onChange={(event) => updateProject((draft) => (draft.data.stage.backgroundAssetId = Number(event.target.value) || null))}>
+          <option value="">Stage color only</option>
+          {backgroundAssets.map((asset) => (
+            <option value={asset.id} key={asset.id}>
+              {asset.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Project thumbnail
+        <select value={project.thumbnailAssetId || ""} onChange={(event) => updateProject((draft) => (draft.thumbnailAssetId = Number(event.target.value) || null))}>
+          <option value="">No thumbnail</option>
+          {thumbnailAssets.map((asset) => (
+            <option value={asset.id} key={asset.id}>
+              {asset.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="thumbnail-preview">
+        {currentThumbnail ? <img src={currentThumbnail.url} alt="" /> : <span>{project.title.slice(0, 1).toUpperCase()}</span>}
+      </div>
+      <dl className="project-facts">
+        <div>
+          <dt>Author</dt>
+          <dd>{project.author}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{project.published ? "Published" : "Draft"}</dd>
+        </div>
+        <div>
+          <dt>Sprites</dt>
+          <dd>{project.data.sprites.length}</dd>
+        </div>
+        <div>
+          <dt>Assets</dt>
+          <dd>{project.assets.length}</dd>
+        </div>
+        <div>
+          <dt>Created</dt>
+          <dd>{new Date(project.createdAt).toLocaleDateString()}</dd>
+        </div>
+        <div>
+          <dt>Updated</dt>
+          <dd>{new Date(project.updatedAt).toLocaleDateString()}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function SpriteList({ sprites, selectedSpriteId, selectedBackground, onSelectBackground, onSelect, onAdd, onDelete, onDuplicate, onMove }) {
   return (
     <div className="sprite-list">
       <div className="section-row">
@@ -705,6 +784,13 @@ function SpriteList({ sprites, selectedSpriteId, onSelect, onAdd, onDelete, onDu
         <button onClick={onAdd} title="Add sprite">
           <Plus size={17} />
         </button>
+      </div>
+      <div className={`sprite-row stage-target ${selectedBackground ? "selected" : ""}`}>
+        <button onClick={onSelectBackground}>Background</button>
+        <span />
+        <span />
+        <span />
+        <span />
       </div>
       {sprites.map((sprite) => (
         <div className={`sprite-row ${selectedSpriteId === sprite.id ? "selected" : ""}`} key={sprite.id}>
@@ -792,72 +878,225 @@ function VariablePanel({ project, updateProject }) {
   );
 }
 
-function SpriteInspector({ sprite, project, updateProject }) {
+function SpriteInspector({ mode = "all", sprite, project, updateProject, setMessage }) {
   const costumeAssets = project.assets.filter((asset) => ["sprite", "costume"].includes(asset.kind));
   const [showBuiltIns, setShowBuiltIns] = useState(false);
+  const [codeDraft, setCodeDraft] = useState(sprite.script.code);
+  const [codeDirty, setCodeDirty] = useState(false);
   const updateSprite = (mutator) =>
     updateProject((draft) => {
       const target = draft.data.sprites.find((item) => item.id === sprite.id);
       mutator(target);
     });
 
+  useEffect(() => {
+    setCodeDraft(sprite.script.code);
+    setCodeDirty(false);
+  }, [sprite.id, sprite.script.language]);
+
+  useEffect(() => {
+    if (!codeDirty) return undefined;
+    const timer = window.setTimeout(() => {
+      updateSprite((draft) => {
+        draft.script.code = codeDraft;
+      });
+      setCodeDirty(false);
+      setMessage?.("Code applied.");
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [codeDraft, codeDirty]);
+
+  const stageX = Math.round(sprite.x - project.data.stage.width / 2);
+  const stageY = Math.round(project.data.stage.height / 2 - sprite.y);
+  const currentCostume = project.assets.find((asset) => asset.id === sprite.costumeAssetId);
+  const showSpriteSettings = mode === "all" || mode === "sprite";
+  const showCodeEditor = mode === "all" || mode === "code";
+
   return (
-    <>
+    <div className="settings-stack">
       <div className="section-row">
         <h2>{sprite.name}</h2>
       </div>
-      <label>
-        Name
-        <input value={sprite.name} onChange={(event) => updateSprite((draft) => (draft.name = event.target.value))} />
-      </label>
-      <div className="grid-two">
-        <label>
-          X
-          <input type="number" value={sprite.x} onChange={(event) => updateSprite((draft) => (draft.x = Number(event.target.value)))} />
-        </label>
-        <label>
-          Y
-          <input type="number" value={sprite.y} onChange={(event) => updateSprite((draft) => (draft.y = Number(event.target.value)))} />
-        </label>
-        <label>
-          Size
-          <input type="number" value={sprite.size} onChange={(event) => updateSprite((draft) => (draft.size = Number(event.target.value)))} />
-        </label>
-        <label>
-          Rotation
-          <input type="number" value={sprite.rotation} onChange={(event) => updateSprite((draft) => (draft.rotation = Number(event.target.value)))} />
-        </label>
+      {showSpriteSettings && (
+        <>
+          <div className="sprite-preview">
+            {currentCostume ? <img src={currentCostume.url} alt="" /> : <span>SC</span>}
+            <div>
+              <strong>{currentCostume?.name || "Default ScriptCraft sprite"}</strong>
+              <span>{currentCostume ? "Costume asset" : "Built-in logo sprite"}</span>
+            </div>
+          </div>
+          <label>
+            Name
+            <input value={sprite.name} onChange={(event) => updateSprite((draft) => (draft.name = event.target.value))} />
+          </label>
+          <div className="grid-two">
+            <label>
+              X
+              <input
+                type="number"
+                value={stageX}
+                onChange={(event) => updateSprite((draft) => (draft.x = project.data.stage.width / 2 + Number(event.target.value || 0)))}
+              />
+            </label>
+            <label>
+              Y
+              <input
+                type="number"
+                value={stageY}
+                onChange={(event) => updateSprite((draft) => (draft.y = project.data.stage.height / 2 - Number(event.target.value || 0)))}
+              />
+            </label>
+            <label>
+              Size
+              <input type="number" value={sprite.size} onChange={(event) => updateSprite((draft) => (draft.size = Number(event.target.value)))} />
+            </label>
+            <label>
+              Rotation
+              <input type="number" value={sprite.rotation} onChange={(event) => updateSprite((draft) => (draft.rotation = Number(event.target.value)))} />
+            </label>
+          </div>
+          <label className="check-row">
+            <input type="checkbox" checked={sprite.visible !== false} onChange={(event) => updateSprite((draft) => (draft.visible = event.target.checked))} />
+            Visible on stage
+          </label>
+          <label>
+            Costume
+            <select value={sprite.costumeAssetId || ""} onChange={(event) => updateSprite((draft) => (draft.costumeAssetId = Number(event.target.value) || null))}>
+              <option value="">Default logo sprite</option>
+              {costumeAssets.map((asset) => (
+                <option value={asset.id} key={asset.id}>
+                  {asset.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
+      {showCodeEditor && (
+        <>
+          <label>
+            Language
+            <select
+              value={sprite.script.language}
+              onChange={(event) => {
+                const nextLanguage = event.target.value;
+                const converted = convertScript(codeDraft, sprite.script.language, nextLanguage);
+                setCodeDraft(converted);
+                setCodeDirty(false);
+                updateSprite((draft) => {
+                  draft.script.code = converted;
+                  draft.script.language = nextLanguage;
+                });
+              }}
+            >
+              <option value="javascript">JavaScript</option>
+              <option value="python">Python</option>
+              <option value="c">C</option>
+            </select>
+          </label>
+          <label>
+            Code
+            <textarea
+              className="code-editor"
+              spellCheck="false"
+              value={codeDraft}
+              onChange={(event) => {
+                setCodeDraft(event.target.value);
+                setCodeDirty(true);
+              }}
+              onBlur={() => {
+                if (!codeDirty) return;
+                updateSprite((draft) => {
+                  draft.script.code = codeDraft;
+                });
+                setCodeDirty(false);
+              }}
+            />
+          </label>
+          <div className="toolbar code-toolbar">
+            <button
+              className="primary"
+              onClick={() => {
+                updateSprite((draft) => {
+                  draft.script.code = codeDraft;
+                });
+                setCodeDirty(false);
+                setMessage?.("Code applied.");
+              }}
+            >
+              <Save size={17} />
+              Apply code
+            </button>
+            <button onClick={() => setShowBuiltIns((value) => !value)}>
+              <Code2 size={17} />
+              {showBuiltIns ? "Hide Functions" : "Info for Functions"}
+            </button>
+            {codeDirty && <span className="inline-status">Applies after 2000 ms idle</span>}
+          </div>
+          {showBuiltIns && (
+            <BuiltInReference
+              language={sprite.script.language}
+              onInsert={(snippet) => {
+                setCodeDraft((current) => `${current.trimEnd()}\n${snippet}`);
+                setCodeDirty(true);
+              }}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function BackgroundInspector({ project, updateProject, setMessage }) {
+  const script = project.data.stage.script || { language: "javascript", code: defaultBackgroundScripts.javascript };
+  const [showBuiltIns, setShowBuiltIns] = useState(false);
+  const [codeDraft, setCodeDraft] = useState(script.code);
+  const [codeDirty, setCodeDirty] = useState(false);
+
+  const updateScript = (mutator) =>
+    updateProject((draft) => {
+      draft.data.stage.script ||= { language: "javascript", code: defaultBackgroundScripts.javascript };
+      mutator(draft.data.stage.script);
+    });
+
+  useEffect(() => {
+    setCodeDraft(script.code);
+    setCodeDirty(false);
+  }, [script.language]);
+
+  useEffect(() => {
+    if (!codeDirty) return undefined;
+    const timer = window.setTimeout(() => {
+      updateScript((draft) => {
+        draft.code = codeDraft;
+      });
+      setCodeDirty(false);
+      setMessage?.("Background code applied.");
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [codeDraft, codeDirty]);
+
+  return (
+    <div className="settings-stack">
+      <div className="section-row">
+        <h2>Background Code</h2>
       </div>
-      <label className="check-row">
-        <input type="checkbox" checked={sprite.visible !== false} onChange={(event) => updateSprite((draft) => (draft.visible = event.target.checked))} />
-        Visible on stage
-      </label>
-      <label>
-        Sprite color
-        <input type="color" value={sprite.color} onChange={(event) => updateSprite((draft) => (draft.color = event.target.value))} />
-      </label>
-      <label>
-        Costume
-        <select value={sprite.costumeAssetId || ""} onChange={(event) => updateSprite((draft) => (draft.costumeAssetId = Number(event.target.value) || null))}>
-          <option value="">Shape</option>
-          {costumeAssets.map((asset) => (
-            <option value={asset.id} key={asset.id}>
-              {asset.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <label>
         Language
         <select
-          value={sprite.script.language}
-          onChange={(event) =>
-            updateSprite((draft) => {
-              const nextLanguage = event.target.value;
-              draft.script.code = convertScript(draft.script.code, draft.script.language, nextLanguage);
-              draft.script.language = nextLanguage;
-            })
-          }
+          value={script.language}
+          onChange={(event) => {
+            const nextLanguage = event.target.value;
+            const converted = convertScript(codeDraft, script.language, nextLanguage);
+            setCodeDraft(converted);
+            setCodeDirty(false);
+            updateScript((draft) => {
+              draft.code = converted;
+              draft.language = nextLanguage;
+            });
+          }}
         >
           <option value="javascript">JavaScript</option>
           <option value="python">Python</option>
@@ -869,25 +1108,50 @@ function SpriteInspector({ sprite, project, updateProject }) {
         <textarea
           className="code-editor"
           spellCheck="false"
-          value={sprite.script.code}
-          onChange={(event) => updateSprite((draft) => (draft.script.code = event.target.value))}
+          value={codeDraft}
+          onChange={(event) => {
+            setCodeDraft(event.target.value);
+            setCodeDirty(true);
+          }}
+          onBlur={() => {
+            if (!codeDirty) return;
+            updateScript((draft) => {
+              draft.code = codeDraft;
+            });
+            setCodeDirty(false);
+          }}
         />
       </label>
-      <button onClick={() => setShowBuiltIns((value) => !value)}>
-        <Code2 size={17} />
-        {showBuiltIns ? "Hide Functions" : "Info for Functions"}
-      </button>
+      <div className="toolbar code-toolbar">
+        <button
+          className="primary"
+          onClick={() => {
+            updateScript((draft) => {
+              draft.code = codeDraft;
+            });
+            setCodeDirty(false);
+            setMessage?.("Background code applied.");
+          }}
+        >
+          <Save size={17} />
+          Apply code
+        </button>
+        <button onClick={() => setShowBuiltIns((value) => !value)}>
+          <Code2 size={17} />
+          {showBuiltIns ? "Hide Functions" : "Info for Functions"}
+        </button>
+        {codeDirty && <span className="inline-status">Applies after 2000 ms idle</span>}
+      </div>
       {showBuiltIns && (
         <BuiltInReference
-          language={sprite.script.language}
-          onInsert={(snippet) =>
-            updateSprite((draft) => {
-              draft.script.code = `${draft.script.code.trimEnd()}\n${snippet}`;
-            })
-          }
+          language={script.language}
+          onInsert={(snippet) => {
+            setCodeDraft((current) => `${current.trimEnd()}\n${snippet}`);
+            setCodeDirty(true);
+          }}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -896,62 +1160,65 @@ const builtIns = [
     name: "start",
     args: "",
     description: "Runs once when Play starts.",
-    js: "function start() {\n  say(\"Ready\", 1);\n}",
-    python: "def start():\n    say(\"Ready\", 1)",
-    c: "void start() {\n  say(\"Ready\", 1);\n}"
+    js: "function start() {\n  say(\"Ready\", 1000);\n}",
+    python: "def start():\n    say(\"Ready\", 1000)",
+    c: "void start() {\n  say(\"Ready\", 1000);\n}"
   },
   {
     name: "update",
     args: "dt",
     description: "Runs every frame while playing.",
-    js: "function update(dt) {\n  move(2);\n}",
-    python: "def update(dt):\n    move(2)",
-    c: "void update(float dt) {\n  move(2);\n}"
+    js: "function update(dt) {\n  move(0.24 * dt);\n}",
+    python: "def update(dt):\n    move(0.24 * dt)",
+    c: "void update(float dt) {\n  move(0.24 * dt);\n}"
   },
   { name: "x / y", args: "", description: "Current sprite position values.", js: "console.log(x, y);", python: "log(x, y)", c: "log(x, y);" },
   { name: "direction", args: "", description: "Current sprite rotation.", js: "console.log(direction);", python: "log(direction)", c: "log(direction);" },
   { name: "mouseX / mouseY", args: "", description: "Mouse position on stage.", js: "console.log(mouseX, mouseY);", python: "log(mouse_x, mouse_y)", c: "log(mouseX, mouseY);" },
-  { name: "mouseDown", args: "", description: "Whether the mouse is pressed.", js: "if (mouseDown) {\n  say(\"click\", 0.2);\n}", python: "if mouse_down:\n    say(\"click\", 0.2)", c: "if (mouseDown) {\n  say(\"click\", 0.2);\n}" },
+  { name: "backgroundColor", args: "", description: "Current background color.", js: "console.log(backgroundColor);", python: "log(backgroundColor)", c: "log(backgroundColor);" },
+  { name: "mouseDown", args: "", description: "Whether the mouse is pressed.", js: "if (mouseDown) {\n  say(\"click\", 200);\n}", python: "if mouse_down:\n    say(\"click\", 200)", c: "if (mouseDown) {\n  say(\"click\", 200);\n}" },
   { name: "console.log", args: "value", description: "Print to the stage console.", js: "console.log(\"hello\");", python: "log(\"hello\")", c: "log(\"hello\");" },
   { name: "move", args: "steps", description: "Move in the sprite direction.", js: "move(10);", python: "move(10)", c: "move(10);" },
   { name: "turn", args: "degrees", description: "Rotate the sprite.", js: "turn(15);", python: "turn(15)", c: "turn(15);" },
   { name: "setRotation", args: "degrees", description: "Set sprite rotation.", js: "setRotation(90);", python: "set_rotation(90)", c: "setRotation(90);" },
   { name: "pointInDirection", args: "degrees", description: "Point to an angle.", js: "pointInDirection(0);", python: "point_in_direction(0)", c: "pointInDirection(0);" },
   { name: "pointTowards", args: "x, y", description: "Face a point.", js: "pointTowards(mouseX, mouseY);", python: "point_towards(mouse_x, mouse_y)", c: "pointTowards(mouseX, mouseY);" },
-  { name: "goTo", args: "x, y", description: "Place the sprite.", js: "goTo(320, 180);", python: "go_to(320, 180)", c: "goTo(320, 180);" },
-  { name: "setX", args: "x", description: "Set horizontal position.", js: "setX(320);", python: "set_x(320)", c: "setX(320);" },
-  { name: "setY", args: "y", description: "Set vertical position.", js: "setY(180);", python: "set_y(180)", c: "setY(180);" },
+  { name: "goTo", args: "x, y", description: "Place the sprite.", js: "goTo(0, 0);", python: "go_to(0, 0)", c: "goTo(0, 0);" },
+  { name: "setX", args: "x", description: "Set horizontal position.", js: "setX(0);", python: "set_x(0)", c: "setX(0);" },
+  { name: "setY", args: "y", description: "Set vertical position.", js: "setY(0);", python: "set_y(0)", c: "setY(0);" },
   { name: "changeX", args: "amount", description: "Move horizontally.", js: "changeX(4);", python: "change_x(4)", c: "changeX(4);" },
-  { name: "changeY", args: "amount", description: "Move vertically.", js: "changeY(-4);", python: "change_y(-4)", c: "changeY(-4);" },
+  { name: "changeY", args: "amount", description: "Move vertically.", js: "changeY(4);", python: "change_y(4)", c: "changeY(4);" },
   { name: "setSize", args: "pixels", description: "Set sprite size.", js: "setSize(80);", python: "set_size(80)", c: "setSize(80);" },
   { name: "setColor", args: "color", description: "Set shape color.", js: "setColor(\"#16a34a\");", python: "set_color(\"#16a34a\")", c: "setColor(\"#16a34a\");" },
-  { name: "say", args: "text, seconds", description: "Show a speech bubble.", js: "say(\"Hello\", 1.5);", python: "say(\"Hello\", 1.5)", c: "say(\"Hello\", 1.5);" },
+  { name: "say", args: "text, milliseconds", description: "Show a speech bubble.", js: "say(\"Hello\", 1500);", python: "say(\"Hello\", 1500)", c: "say(\"Hello\", 1500);" },
   { name: "show / hide", args: "", description: "Toggle sprite visibility.", js: "show();\nhide();", python: "show()\nhide()", c: "show();\nhide();" },
   { name: "key", args: "name", description: "Check a keyboard key.", js: "if (key(\"ArrowRight\")) {\n  changeX(4);\n}", python: "if key(\"ArrowRight\"):\n    change_x(4)", c: "if (key(\"ArrowRight\")) {\n  changeX(4);\n}" },
-  { name: "random", args: "min, max", description: "Pick a random number.", js: "goTo(random(0, 640), random(0, 360));", python: "go_to(random(0, 640), random(0, 360))", c: "goTo(random(0, 640), random(0, 360));" },
+  { name: "random", args: "min, max", description: "Pick a random number.", js: "goTo(random(-240, 240), random(-180, 180));", python: "go_to(random(-240, 240), random(-180, 180))", c: "goTo(random(-240, 240), random(-180, 180));" },
   { name: "touchingEdge", args: "", description: "Check stage edge.", js: "if (touchingEdge()) {\n  turn(180);\n}", python: "if touching_edge():\n    turn(180)", c: "if (touchingEdge()) {\n  turn(180);\n}" },
-  { name: "touchingSprite", args: "name", description: "Check another sprite.", js: "if (touchingSprite(\"Sprite 2\")) {\n  say(\"hit\", 0.5);\n}", python: "if touching_sprite(\"Sprite 2\"):\n    say(\"hit\", 0.5)", c: "if (touchingSprite(\"Sprite 2\")) {\n  say(\"hit\", 0.5);\n}" },
+  { name: "touchingSprite", args: "name", description: "Check another sprite.", js: "if (touchingSprite(\"Sprite 2\")) {\n  say(\"hit\", 500);\n}", python: "if touching_sprite(\"Sprite 2\"):\n    say(\"hit\", 500)", c: "if (touchingSprite(\"Sprite 2\")) {\n  say(\"hit\", 500);\n}" },
   { name: "touchingMouse", args: "", description: "Check the mouse pointer.", js: "if (touchingMouse()) {\n  setColor(\"#ef4444\");\n}", python: "if touching_mouse():\n    set_color(\"#ef4444\")", c: "if (touchingMouse()) {\n  setColor(\"#ef4444\");\n}" },
   { name: "bounceOnEdge", args: "", description: "Keep sprite on stage.", js: "bounceOnEdge();", python: "bounce_on_edge()", c: "bounceOnEdge();" },
-  { name: "timer", args: "", description: "Seconds since timer reset.", js: "console.log(timer());", python: "log(timer())", c: "log(timer());" },
+  { name: "timer", args: "", description: "Milliseconds since timer reset.", js: "console.log(timer());", python: "log(timer())", c: "log(timer());" },
   { name: "resetTimer", args: "", description: "Reset the timer.", js: "resetTimer();", python: "reset_timer()", c: "resetTimer();" },
   { name: "getVar", args: "name", description: "Read a variable.", js: "const score = getVar(\"score\");", python: "score = get_var(\"score\")", c: "float score = getVar(\"score\");" },
   { name: "setVar", args: "name, value", description: "Set a variable.", js: "setVar(\"score\", 0);", python: "set_var(\"score\", 0)", c: "setVar(\"score\", 0);" },
   { name: "changeVar", args: "name, amount", description: "Change a variable.", js: "changeVar(\"score\", 1);", python: "change_var(\"score\", 1)", c: "changeVar(\"score\", 1);" },
   { name: "broadcast", args: "message", description: "Send a message to sprites.", js: "broadcast(\"start\");", python: "broadcast(\"start\")", c: "broadcast(\"start\");" },
-  { name: "onMessage", args: "message", description: "Runs when broadcast receives a message.", js: "function onMessage(message) {\n  say(message, 1);\n}", python: "def on_message(message):\n    say(message, 1)", c: "void onMessage(char* message) {\n  say(message, 1);\n}" },
+  { name: "onMessage", args: "message", description: "Runs when broadcast receives a message.", js: "function onMessage(message) {\n  say(message, 1000);\n}", python: "def on_message(message):\n    say(message, 1000)", c: "void onMessage(char* message) {\n  say(message, 1000);\n}" },
   { name: "penDown / penUp", args: "", description: "Start or stop drawing.", js: "penDown();\nmove(40);\npenUp();", python: "pen_down()\nmove(40)\npen_up()", c: "penDown();\nmove(40);\npenUp();" },
   { name: "setPenColor", args: "color", description: "Set pen color.", js: "setPenColor(\"#1565c0\");", python: "set_pen_color(\"#1565c0\")", c: "setPenColor(\"#1565c0\");" },
   { name: "setPenSize", args: "size", description: "Set pen width.", js: "setPenSize(4);", python: "set_pen_size(4)", c: "setPenSize(4);" },
-  { name: "clearPen", args: "", description: "Clear pen drawings.", js: "clearPen();", python: "clear_pen()", c: "clearPen();" }
+  { name: "clearPen", args: "", description: "Clear pen drawings.", js: "clearPen();", python: "clear_pen()", c: "clearPen();" },
+  { name: "setBackgroundColor", args: "color", description: "Set the stage background color.", js: "setBackgroundColor(\"#eef3ff\");", python: "set_background_color(\"#eef3ff\")", c: "setBackgroundColor(\"#eef3ff\");" }
 ];
 
 const builtInParamInfo = {
   start: ["No parameters. Runs once when Play starts."],
-  update: ["dt: seconds since the last frame."],
+  update: ["dt: milliseconds since the last frame."],
   "x / y": ["x: current horizontal position.", "y: current vertical position."],
   direction: ["No parameters. Reads the sprite rotation in degrees."],
   "mouseX / mouseY": ["mouseX: mouse horizontal stage position.", "mouseY: mouse vertical stage position."],
+  backgroundColor: ["No parameters. Reads the stage background color."],
   mouseDown: ["No parameters. True while the mouse is pressed."],
   "console.log": ["value: any value to print in the stage console."],
   move: ["steps: pixels to move in the current direction."],
@@ -966,7 +1233,7 @@ const builtInParamInfo = {
   changeY: ["amount: pixels to add to y."],
   setSize: ["pixels: sprite display size."],
   setColor: ["color: CSS color like \"#16a34a\" or \"red\"."],
-  say: ["text: message to show.", "seconds: how long the bubble stays."],
+  say: ["text: message to show.", "milliseconds: how long the bubble stays."],
   "show / hide": ["No parameters. Changes sprite visibility."],
   key: ["name: keyboard key, like \"ArrowRight\" or \"a\"."],
   random: ["min: lowest value.", "max: highest value."],
@@ -974,7 +1241,7 @@ const builtInParamInfo = {
   touchingSprite: ["name: sprite name to check. Leave empty to check any sprite."],
   touchingMouse: ["No parameters. True when the pointer touches the sprite."],
   bounceOnEdge: ["No parameters. Clamps the sprite inside the stage."],
-  timer: ["No parameters. Returns seconds since reset."],
+  timer: ["No parameters. Returns milliseconds since reset."],
   resetTimer: ["No parameters. Starts timer back at zero."],
   getVar: ["name: variable name to read."],
   setVar: ["name: variable name.", "value: new value."],
@@ -984,7 +1251,8 @@ const builtInParamInfo = {
   "penDown / penUp": ["No parameters. Starts or stops drawing while moving."],
   setPenColor: ["color: CSS color for pen lines."],
   setPenSize: ["size: pen line width in pixels."],
-  clearPen: ["No parameters. Clears all pen drawings."]
+  clearPen: ["No parameters. Clears all pen drawings."],
+  setBackgroundColor: ["color: CSS color for the stage background."]
 };
 
 function BuiltInReference({ language, onInsert }) {
@@ -1079,7 +1347,7 @@ function AssetPanel({ project, assetKind, setAssetKind, onUploaded, onApply, set
               onClick={async () => {
                 await api.deleteAsset(project.id, asset.id);
                 const data = await api.project(project.id);
-                onUploaded(data.project);
+                onUploaded(normalizeProject(data.project));
                 setMessage("Asset deleted.");
               }}
             >
@@ -1097,7 +1365,8 @@ function DrawingTool({ onSave }) {
   const canvasRef = useRef(null);
   const [color, setColor] = useState("#111827");
   const [size, setSize] = useState(8);
-  const drawing = useRef(false);
+  const [mode, setMode] = useState("brush");
+  const drawing = useRef({ active: false, start: null, snapshot: null });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1108,24 +1377,72 @@ function DrawingTool({ onSave }) {
 
   function point(event) {
     const rect = canvasRef.current.getBoundingClientRect();
-    const source = event.touches?.[0] || event;
+    const source = event.touches?.[0] || event.changedTouches?.[0] || event;
     return {
       x: ((source.clientX - rect.left) / rect.width) * canvasRef.current.width,
       y: ((source.clientY - rect.top) / rect.height) * canvasRef.current.height
     };
   }
 
-  function draw(event) {
-    if (!drawing.current) return;
-    event.preventDefault();
-    const ctx = canvasRef.current.getContext("2d");
-    const p = point(event);
-    ctx.lineTo(p.x, p.y);
+  function configureStroke(ctx, tool = mode) {
     ctx.strokeStyle = color;
     ctx.lineWidth = size;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+    ctx.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
+  }
+
+  function strokeShape(ctx, start, end, tool = mode) {
+    configureStroke(ctx, tool);
+    ctx.beginPath();
+    if (tool === "line") {
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+    } else if (tool === "rectangle") {
+      ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y);
+    } else if (tool === "ellipse") {
+      ctx.ellipse((start.x + end.x) / 2, (start.y + end.y) / 2, Math.abs(end.x - start.x) / 2, Math.abs(end.y - start.y) / 2, 0, 0, Math.PI * 2);
+    }
     ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function beginDraw(event) {
+    event.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const p = point(event);
+    drawing.current = {
+      active: true,
+      start: p,
+      snapshot: ctx.getImageData(0, 0, canvas.width, canvas.height)
+    };
+    configureStroke(ctx);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  }
+
+  function draw(event) {
+    if (!drawing.current.active) return;
+    event.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const p = point(event);
+    if (mode === "brush" || mode === "eraser") {
+      configureStroke(ctx);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ctx.globalCompositeOperation = "source-over";
+      return;
+    }
+    ctx.putImageData(drawing.current.snapshot, 0, 0);
+    strokeShape(ctx, drawing.current.start, p);
+  }
+
+  function endDraw(event) {
+    if (!drawing.current.active) return;
+    if (event) draw(event);
+    drawing.current = { active: false, start: null, snapshot: null };
   }
 
   return (
@@ -1134,28 +1451,28 @@ function DrawingTool({ onSave }) {
         ref={canvasRef}
         width="320"
         height="180"
-        onMouseDown={(event) => {
-          drawing.current = true;
-          const ctx = canvasRef.current.getContext("2d");
-          const p = point(event);
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
-        }}
+        onMouseDown={beginDraw}
         onMouseMove={draw}
-        onMouseUp={() => (drawing.current = false)}
-        onMouseLeave={() => (drawing.current = false)}
-        onTouchStart={(event) => {
-          drawing.current = true;
-          const ctx = canvasRef.current.getContext("2d");
-          const p = point(event);
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
-        }}
+        onMouseUp={endDraw}
+        onMouseLeave={() => endDraw()}
+        onTouchStart={beginDraw}
         onTouchMove={draw}
-        onTouchEnd={() => (drawing.current = false)}
+        onTouchEnd={endDraw}
       />
       <div className="drawing-actions">
-        <Brush size={17} />
+        <div className="segmented tool-modes">
+          {[
+            ["brush", Brush, "Brush"],
+            ["eraser", Eraser, "Eraser"],
+            ["line", Minus, "Line"],
+            ["rectangle", Square, "Rectangle"],
+            ["ellipse", Circle, "Ellipse"]
+          ].map(([key, Icon, label]) => (
+            <button key={key} className={mode === key ? "active" : ""} onClick={() => setMode(key)} title={label}>
+              <Icon size={16} />
+            </button>
+          ))}
+        </div>
         <input type="color" value={color} onChange={(event) => setColor(event.target.value)} />
         <input type="range" min="2" max="24" value={size} onChange={(event) => setSize(Number(event.target.value))} />
         <button
@@ -1186,6 +1503,8 @@ function Stage({ project, editable = false, selectedSpriteId, onProjectChange, p
   const [runtimeError, setRuntimeError] = useState("");
   const [consoleLines, setConsoleLines] = useState([]);
   const assetMap = useMemo(() => Object.fromEntries(project.assets.map((asset) => [asset.id, asset.url])), [project.assets]);
+  const dataSignature = useMemo(() => JSON.stringify(project.data), [project.data]);
+  const assetSignature = useMemo(() => project.assets.map((asset) => `${asset.id}:${asset.url}`).join("|"), [project.assets]);
 
   useEffect(() => {
     setRuntimeError("");
@@ -1202,7 +1521,7 @@ function Stage({ project, editable = false, selectedSpriteId, onProjectChange, p
     runtime.draw();
     if (isPlaying && !isPaused) runtime.start();
     return () => runtime.dispose();
-  }, [project.id, JSON.stringify(project.data), JSON.stringify(assetMap)]);
+  }, [project.id, dataSignature, assetSignature]);
 
   useEffect(() => {
     if (!runtimeRef.current) return;
@@ -1299,7 +1618,7 @@ function Stage({ project, editable = false, selectedSpriteId, onProjectChange, p
         )}
       </div>
       <canvas className={editable ? "editable-canvas" : ""} ref={canvasRef} width={project.data.stage.width} height={project.data.stage.height} />
-      {editable && <p className="muted">Selected sprite: {selectedSpriteId || "none"}</p>}
+      {editable && <p className="muted">Selected target: {selectedSpriteId === "__stage__" ? "Background" : selectedSpriteId || "none"}</p>}
       <div className="console-panel">
         <div className="section-row">
           <h2>Console</h2>

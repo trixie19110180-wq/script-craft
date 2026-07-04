@@ -21,6 +21,7 @@ const apiNameMap = {
   penUp: "pen_up",
   setPenColor: "set_pen_color",
   setPenSize: "set_pen_size",
+  setBackgroundColor: "set_background_color",
   onMessage: "on_message",
   bounceOnEdge: "bounce_on_edge",
   touchingEdge: "touching_edge",

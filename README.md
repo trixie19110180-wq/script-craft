@@ -118,17 +118,17 @@ git push -u origin main
 
 ## ScriptCraft code API
 
-Every sprite can define `start` and `update`.
+Every sprite and the background can define `start`, `update`, and `onMessage`. `update(dt)` receives milliseconds since the last frame, and time-based commands also use milliseconds. The code coordinate system is centered like Scratch: on the default 480 x 360 stage, `x` is `-240..240` and `y` is `-180..180`.
 
 JavaScript:
 
 ```js
 function start() {
-  say("Ready", 1);
+  say("Ready", 1000);
 }
 
 function update(dt) {
-  if (key("ArrowRight")) changeX(4);
+  if (key("ArrowRight")) changeX(0.24 * dt);
   bounceOnEdge();
 }
 ```
@@ -137,11 +137,11 @@ Python mode:
 
 ```python
 def start():
-    say("Ready", 1)
+    say("Ready", 1000)
 
 def update(dt):
     if key("ArrowRight"):
-        change_x(4)
+        change_x(0.24 * dt)
     bounce_on_edge()
 ```
 
@@ -149,16 +149,24 @@ C mode:
 
 ```c
 void start() {
-  say("Ready", 1);
+  say("Ready", 1000);
 }
 
 void update(float dt) {
-  if (key("ArrowRight")) changeX(4);
+  if (key("ArrowRight")) changeX(0.24 * dt);
   bounceOnEdge();
 }
 ```
 
-Available values and commands include `x`, `y`, `direction`, `mouseX`, `mouseY`, `mouseDown`, `move`, `turn`, `setRotation`, `pointInDirection`, `pointTowards`, `goTo`, `setX`, `setY`, `changeX`, `changeY`, `setSize`, `setColor`, `say`, `show`, `hide`, `key`, `random`, `timer`, `resetTimer`, `getVar`, `setVar`, `changeVar`, `touchingEdge`, `touchingSprite`, `touchingMouse`, `bounceOnEdge`, `broadcast`, `onMessage`, `penDown`, `penUp`, `setPenColor`, `setPenSize`, `clearPen`, `console.log`, and `log`.
+Background code can change the stage:
+
+```js
+function start() {
+  setBackgroundColor("#eef3ff");
+}
+```
+
+Available values and commands include `x`, `y`, `direction`, `mouseX`, `mouseY`, `mouseDown`, `backgroundColor`, `move`, `turn`, `setRotation`, `pointInDirection`, `pointTowards`, `goTo`, `setX`, `setY`, `changeX`, `changeY`, `setSize`, `setColor`, `say`, `show`, `hide`, `key`, `random`, `timer`, `resetTimer`, `getVar`, `setVar`, `changeVar`, `touchingEdge`, `touchingSprite`, `touchingMouse`, `bounceOnEdge`, `broadcast`, `onMessage`, `penDown`, `penUp`, `setPenColor`, `setPenSize`, `clearPen`, `setBackgroundColor`, `console.log`, and `log`.
 
 ## Project files
 
