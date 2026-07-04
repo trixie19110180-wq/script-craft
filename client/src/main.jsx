@@ -15,9 +15,11 @@ import {
   LogOut,
   Maximize2,
   Minimize2,
+  Pause,
   Play,
   Plus,
   Save,
+  Square,
   Trash2,
   Upload,
   User
@@ -45,6 +47,7 @@ const api = {
   project: (id) => api.request(`/api/projects/${id}`),
   createProject: (body) => api.request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   importProject: (form) => api.request("/api/projects/import", { method: "POST", body: form }),
+  remixProject: (id) => api.request(`/api/projects/${id}/remix`, { method: "POST" }),
   saveProject: (id, body) => api.request(`/api/projects/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteProject: (id) => api.request(`/api/projects/${id}`, { method: "DELETE" }),
   uploadAsset: (id, form) => api.request(`/api/projects/${id}/assets`, { method: "POST", body: form }),
@@ -371,6 +374,28 @@ function ProjectViewer({ id, user, setMessage }) {
           <span>by {project.author}</span>
           <span>updated {new Date(project.updatedAt).toLocaleDateString()}</span>
         </div>
+        {project.remixOfProjectId && (
+          <p className="remix-note">
+            Remixed from {project.remixOfTitle || "a project"} by {project.remixOfAuthor || "unknown"}
+          </p>
+        )}
+        {user && user.username !== project.author && (
+          <button
+            className="primary"
+            onClick={async () => {
+              try {
+                const data = await api.remixProject(project.id);
+                setMessage("Remix created.");
+                navigate(`/editor/${data.project.id}`);
+              } catch (err) {
+                setMessage(err.message);
+              }
+            }}
+          >
+            <Copy size={17} />
+            Remix
+          </button>
+        )}
         {user?.username === project.author && (
           <button onClick={() => navigate(`/editor/${project.id}`)}>
             <Code2 size={17} />
@@ -389,6 +414,7 @@ function Editor({ id, user, setMessage }) {
   const [assetKind, setAssetKind] = useState("costume");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     api.project(id)
@@ -410,9 +436,11 @@ function Editor({ id, user, setMessage }) {
       mutator(next);
       return next;
     });
+    setDirty(true);
   }
 
-  async function save(overrides = {}) {
+  async function save(overrides = {}, options = {}) {
+    if (!project) return;
     setSaving(true);
     try {
       const data = await api.saveProject(project.id, {
@@ -424,13 +452,22 @@ function Editor({ id, user, setMessage }) {
         ...overrides
       });
       setProject(data.project);
-      setMessage("Saved.");
+      setDirty(false);
+      if (!options.silent) setMessage("Saved.");
     } catch (err) {
       setMessage(err.message);
     } finally {
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (!project || !dirty) return undefined;
+    const timer = window.setTimeout(() => {
+      save({}, { silent: true });
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [project, dirty]);
 
   if (error) return <section className="page-shell"><p className="error">{error}</p></section>;
   if (!project) return <section className="page-shell"><p className="muted">Loading editor...</p></section>;
@@ -756,6 +793,7 @@ function VariablePanel({ project, updateProject }) {
 
 function SpriteInspector({ sprite, project, updateProject }) {
   const costumeAssets = project.assets.filter((asset) => ["sprite", "costume"].includes(asset.kind));
+  const [showBuiltIns, setShowBuiltIns] = useState(false);
   const updateSprite = (mutator) =>
     updateProject((draft) => {
       const target = draft.data.sprites.find((item) => item.id === sprite.id);
@@ -834,34 +872,77 @@ function SpriteInspector({ sprite, project, updateProject }) {
           onChange={(event) => updateSprite((draft) => (draft.script.code = event.target.value))}
         />
       </label>
-      <BuiltInReference
-        language={sprite.script.language}
-        onInsert={(snippet) =>
-          updateSprite((draft) => {
-            draft.script.code = `${draft.script.code.trimEnd()}\n${snippet}`;
-          })
-        }
-      />
+      <button onClick={() => setShowBuiltIns((value) => !value)}>
+        <Code2 size={17} />
+        {showBuiltIns ? "Hide Functions" : "Info for Functions"}
+      </button>
+      {showBuiltIns && (
+        <BuiltInReference
+          language={sprite.script.language}
+          onInsert={(snippet) =>
+            updateSprite((draft) => {
+              draft.script.code = `${draft.script.code.trimEnd()}\n${snippet}`;
+            })
+          }
+        />
+      )}
     </>
   );
 }
 
 const builtIns = [
+  {
+    name: "start",
+    args: "",
+    description: "Runs once when Play starts.",
+    js: "function start() {\n  say(\"Ready\", 1);\n}",
+    python: "def start():\n    say(\"Ready\", 1)",
+    c: "void start() {\n  say(\"Ready\", 1);\n}"
+  },
+  {
+    name: "update",
+    args: "dt",
+    description: "Runs every frame while playing.",
+    js: "function update(dt) {\n  move(2);\n}",
+    python: "def update(dt):\n    move(2)",
+    c: "void update(float dt) {\n  move(2);\n}"
+  },
+  { name: "x / y", args: "", description: "Current sprite position values.", js: "console.log(x, y);", python: "log(x, y)", c: "log(x, y);" },
+  { name: "direction", args: "", description: "Current sprite rotation.", js: "console.log(direction);", python: "log(direction)", c: "log(direction);" },
+  { name: "mouseX / mouseY", args: "", description: "Mouse position on stage.", js: "console.log(mouseX, mouseY);", python: "log(mouse_x, mouse_y)", c: "log(mouseX, mouseY);" },
+  { name: "mouseDown", args: "", description: "Whether the mouse is pressed.", js: "if (mouseDown) {\n  say(\"click\", 0.2);\n}", python: "if mouse_down:\n    say(\"click\", 0.2)", c: "if (mouseDown) {\n  say(\"click\", 0.2);\n}" },
+  { name: "console.log", args: "value", description: "Print to the stage console.", js: "console.log(\"hello\");", python: "log(\"hello\")", c: "log(\"hello\");" },
   { name: "move", args: "steps", description: "Move in the sprite direction.", js: "move(10);", python: "move(10)", c: "move(10);" },
   { name: "turn", args: "degrees", description: "Rotate the sprite.", js: "turn(15);", python: "turn(15)", c: "turn(15);" },
+  { name: "setRotation", args: "degrees", description: "Set sprite rotation.", js: "setRotation(90);", python: "set_rotation(90)", c: "setRotation(90);" },
+  { name: "pointInDirection", args: "degrees", description: "Point to an angle.", js: "pointInDirection(0);", python: "point_in_direction(0)", c: "pointInDirection(0);" },
+  { name: "pointTowards", args: "x, y", description: "Face a point.", js: "pointTowards(mouseX, mouseY);", python: "point_towards(mouse_x, mouse_y)", c: "pointTowards(mouseX, mouseY);" },
   { name: "goTo", args: "x, y", description: "Place the sprite.", js: "goTo(320, 180);", python: "go_to(320, 180)", c: "goTo(320, 180);" },
+  { name: "setX", args: "x", description: "Set horizontal position.", js: "setX(320);", python: "set_x(320)", c: "setX(320);" },
+  { name: "setY", args: "y", description: "Set vertical position.", js: "setY(180);", python: "set_y(180)", c: "setY(180);" },
   { name: "changeX", args: "amount", description: "Move horizontally.", js: "changeX(4);", python: "change_x(4)", c: "changeX(4);" },
   { name: "changeY", args: "amount", description: "Move vertically.", js: "changeY(-4);", python: "change_y(-4)", c: "changeY(-4);" },
   { name: "setSize", args: "pixels", description: "Set sprite size.", js: "setSize(80);", python: "set_size(80)", c: "setSize(80);" },
+  { name: "setColor", args: "color", description: "Set shape color.", js: "setColor(\"#16a34a\");", python: "set_color(\"#16a34a\")", c: "setColor(\"#16a34a\");" },
   { name: "say", args: "text, seconds", description: "Show a speech bubble.", js: "say(\"Hello\", 1.5);", python: "say(\"Hello\", 1.5)", c: "say(\"Hello\", 1.5);" },
   { name: "show / hide", args: "", description: "Toggle sprite visibility.", js: "show();\nhide();", python: "show()\nhide()", c: "show();\nhide();" },
   { name: "key", args: "name", description: "Check a keyboard key.", js: "if (key(\"ArrowRight\")) {\n  changeX(4);\n}", python: "if key(\"ArrowRight\"):\n    change_x(4)", c: "if (key(\"ArrowRight\")) {\n  changeX(4);\n}" },
   { name: "random", args: "min, max", description: "Pick a random number.", js: "goTo(random(0, 640), random(0, 360));", python: "go_to(random(0, 640), random(0, 360))", c: "goTo(random(0, 640), random(0, 360));" },
   { name: "touchingEdge", args: "", description: "Check stage edge.", js: "if (touchingEdge()) {\n  turn(180);\n}", python: "if touching_edge():\n    turn(180)", c: "if (touchingEdge()) {\n  turn(180);\n}" },
+  { name: "touchingSprite", args: "name", description: "Check another sprite.", js: "if (touchingSprite(\"Sprite 2\")) {\n  say(\"hit\", 0.5);\n}", python: "if touching_sprite(\"Sprite 2\"):\n    say(\"hit\", 0.5)", c: "if (touchingSprite(\"Sprite 2\")) {\n  say(\"hit\", 0.5);\n}" },
+  { name: "touchingMouse", args: "", description: "Check the mouse pointer.", js: "if (touchingMouse()) {\n  setColor(\"#ef4444\");\n}", python: "if touching_mouse():\n    set_color(\"#ef4444\")", c: "if (touchingMouse()) {\n  setColor(\"#ef4444\");\n}" },
   { name: "bounceOnEdge", args: "", description: "Keep sprite on stage.", js: "bounceOnEdge();", python: "bounce_on_edge()", c: "bounceOnEdge();" },
+  { name: "timer", args: "", description: "Seconds since timer reset.", js: "console.log(timer());", python: "log(timer())", c: "log(timer());" },
+  { name: "resetTimer", args: "", description: "Reset the timer.", js: "resetTimer();", python: "reset_timer()", c: "resetTimer();" },
   { name: "getVar", args: "name", description: "Read a variable.", js: "const score = getVar(\"score\");", python: "score = get_var(\"score\")", c: "float score = getVar(\"score\");" },
   { name: "setVar", args: "name, value", description: "Set a variable.", js: "setVar(\"score\", 0);", python: "set_var(\"score\", 0)", c: "setVar(\"score\", 0);" },
-  { name: "changeVar", args: "name, amount", description: "Change a variable.", js: "changeVar(\"score\", 1);", python: "change_var(\"score\", 1)", c: "changeVar(\"score\", 1);" }
+  { name: "changeVar", args: "name, amount", description: "Change a variable.", js: "changeVar(\"score\", 1);", python: "change_var(\"score\", 1)", c: "changeVar(\"score\", 1);" },
+  { name: "broadcast", args: "message", description: "Send a message to sprites.", js: "broadcast(\"start\");", python: "broadcast(\"start\")", c: "broadcast(\"start\");" },
+  { name: "onMessage", args: "message", description: "Runs when broadcast receives a message.", js: "function onMessage(message) {\n  say(message, 1);\n}", python: "def on_message(message):\n    say(message, 1)", c: "void onMessage(char* message) {\n  say(message, 1);\n}" },
+  { name: "penDown / penUp", args: "", description: "Start or stop drawing.", js: "penDown();\nmove(40);\npenUp();", python: "pen_down()\nmove(40)\npen_up()", c: "penDown();\nmove(40);\npenUp();" },
+  { name: "setPenColor", args: "color", description: "Set pen color.", js: "setPenColor(\"#1565c0\");", python: "set_pen_color(\"#1565c0\")", c: "setPenColor(\"#1565c0\");" },
+  { name: "setPenSize", args: "size", description: "Set pen width.", js: "setPenSize(4);", python: "set_pen_size(4)", c: "setPenSize(4);" },
+  { name: "clearPen", args: "", description: "Clear pen drawings.", js: "clearPen();", python: "clear_pen()", c: "clearPen();" }
 ];
 
 function BuiltInReference({ language, onInsert }) {
@@ -1053,28 +1134,34 @@ function Stage({ project, editable = false, selectedSpriteId, onProjectChange, p
   const canvasRef = useRef(null);
   const runtimeRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(playing);
+  const [isPaused, setIsPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [runtimeError, setRuntimeError] = useState("");
+  const [consoleLines, setConsoleLines] = useState([]);
   const assetMap = useMemo(() => Object.fromEntries(project.assets.map((asset) => [asset.id, asset.url])), [project.assets]);
 
   useEffect(() => {
+    setRuntimeError("");
     const runtime = createRuntime(canvasRef.current, project.data, assetMap, {
       onError: (message) => {
         setRuntimeError(message);
         setMessage?.(message);
+      },
+      onLog: (line) => {
+        setConsoleLines((current) => [...current.slice(-80), { id: `${Date.now()}-${Math.random()}`, text: line }]);
       }
     });
     runtimeRef.current = runtime;
     runtime.draw();
-    if (isPlaying) runtime.start();
-    return () => runtime.stop();
+    if (isPlaying && !isPaused) runtime.start();
+    return () => runtime.dispose();
   }, [project.id, JSON.stringify(project.data), JSON.stringify(assetMap)]);
 
   useEffect(() => {
     if (!runtimeRef.current) return;
-    if (isPlaying) runtimeRef.current.start();
-    else runtimeRef.current.stop();
-  }, [isPlaying]);
+    if (!isPlaying) runtimeRef.current.stop();
+    else if (isPaused) runtimeRef.current.pause();
+  }, [isPlaying, isPaused]);
 
   useEffect(() => {
     const onChange = () => setIsFullscreen(document.fullscreenElement === wrapRef.current);
@@ -1116,10 +1203,41 @@ function Stage({ project, editable = false, selectedSpriteId, onProjectChange, p
         </div>
         {showControls && (
           <div className="toolbar">
-            <button className="primary" onClick={() => setIsPlaying((value) => !value)}>
-              <Play size={17} />
+            <button
+              className="primary"
+              onClick={() => {
+                setRuntimeError("");
+                if (isPlaying) {
+                  runtimeRef.current?.stop();
+                  setIsPlaying(false);
+                  setIsPaused(false);
+                } else {
+                  setConsoleLines([]);
+                  setIsPaused(false);
+                  runtimeRef.current?.start();
+                  setIsPlaying(true);
+                }
+              }}
+            >
+              {isPlaying ? <Square size={17} /> : <Play size={17} />}
               {isPlaying ? "Stop" : "Play"}
             </button>
+            {isPlaying && (
+              <button
+                onClick={() => {
+                  if (isPaused) {
+                    runtimeRef.current?.resume();
+                    setIsPaused(false);
+                  } else {
+                    runtimeRef.current?.pause();
+                    setIsPaused(true);
+                  }
+                }}
+              >
+                {isPaused ? <Play size={17} /> : <Pause size={17} />}
+                {isPaused ? "Resume" : "Pause"}
+              </button>
+            )}
             <button onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
               {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
               {isFullscreen ? "Exit" : "Fullscreen"}
@@ -1135,6 +1253,15 @@ function Stage({ project, editable = false, selectedSpriteId, onProjectChange, p
       </div>
       <canvas className={editable ? "editable-canvas" : ""} ref={canvasRef} width={project.data.stage.width} height={project.data.stage.height} />
       {editable && <p className="muted">Selected sprite: {selectedSpriteId || "none"}</p>}
+      <div className="console-panel">
+        <div className="section-row">
+          <h2>Console</h2>
+          <button onClick={() => setConsoleLines([])}>Clear</button>
+        </div>
+        <div className="console-output">
+          {consoleLines.length ? consoleLines.map((line) => <div key={line.id}>{line.text}</div>) : <span>No logs yet.</span>}
+        </div>
+      </div>
     </div>
   );
 }

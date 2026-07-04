@@ -11,6 +11,8 @@ ScriptCraft is a Scratch-like creative coding platform for browser-based sprite 
 - Built-in drawing tool that saves drawings as project image assets.
 - Fullscreen project playback.
 - In-editor built-in function reference with insert buttons.
+- In-app stage console for `console.log(...)` and `log(...)`.
+- Remix button for published projects, with original project attribution.
 - Variables with stage monitors and runtime commands.
 - Sprite duplicate, visibility, and layer-order controls.
 - Stage thumbnail capture from the editor.
@@ -147,7 +149,7 @@ void update(float dt) {
 }
 ```
 
-Available commands include `move`, `turn`, `goTo`, `setX`, `setY`, `changeX`, `changeY`, `setSize`, `say`, `show`, `hide`, `key`, `random`, `touchingEdge`, and `bounceOnEdge`.
+Available values and commands include `x`, `y`, `direction`, `mouseX`, `mouseY`, `mouseDown`, `move`, `turn`, `setRotation`, `pointInDirection`, `pointTowards`, `goTo`, `setX`, `setY`, `changeX`, `changeY`, `setSize`, `setColor`, `say`, `show`, `hide`, `key`, `random`, `timer`, `resetTimer`, `getVar`, `setVar`, `changeVar`, `touchingEdge`, `touchingSprite`, `touchingMouse`, `bounceOnEdge`, `broadcast`, `onMessage`, `penDown`, `penUp`, `setPenColor`, `setPenSize`, `clearPen`, `console.log`, and `log`.
 
 ## Project files
 

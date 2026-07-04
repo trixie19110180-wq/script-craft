@@ -171,6 +171,12 @@ main {
   color: #607089;
 }
 
+.remix-note {
+  border-left: 3px solid #1565c0;
+  padding-left: 10px;
+  font-size: 0.92rem;
+}
+
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -315,6 +321,31 @@ main {
 .runtime-error,
 .error {
   color: #a1172d;
+}
+
+.console-panel {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f9fbff;
+  display: grid;
+  gap: 8px;
+}
+
+.console-output {
+  min-height: 54px;
+  max-height: 120px;
+  overflow: auto;
+  border-radius: 6px;
+  background: #101827;
+  color: #e5edf8;
+  padding: 8px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.console-output span {
+  color: #94a3b8;
 }
 
 .sprite-list {

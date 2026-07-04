@@ -47,6 +47,7 @@ function dataUrlToAsset(projectId, asset) {
 function defaultData() {
   return {
     stage: { width: 640, height: 360, backgroundColor: "#eef3ff", backgroundAssetId: null },
+    variables: [],
     sprites: []
   };
 }

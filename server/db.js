@@ -70,6 +70,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 `);
 
+const projectColumns = db.prepare("PRAGMA table_info(projects)").all().map((column) => column.name);
+if (!projectColumns.includes("remix_of_project_id")) {
+  db.exec("ALTER TABLE projects ADD COLUMN remix_of_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL");
+}
+
 export function projectSummary(row) {
   return {
     id: row.id,
@@ -79,7 +84,10 @@ export function projectSummary(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     author: row.author,
-    thumbnailUrl: row.thumbnail_url || null
+    thumbnailUrl: row.thumbnail_url || null,
+    remixOfProjectId: row.remix_of_project_id || null,
+    remixOfTitle: row.remix_of_title || null,
+    remixOfAuthor: row.remix_of_author || null
   };
 }
 

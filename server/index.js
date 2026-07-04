@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "node:fs";
 import helmet from "helmet";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +26,7 @@ app.use("/uploads", express.static(uploadDir, { fallthrough: false, maxAge: "7d"
 
 const defaultProjectData = {
   stage: { width: 640, height: 360, backgroundColor: "#eef3ff", backgroundAssetId: null },
+  variables: [],
   sprites: [
     {
       id: "sprite-1",
@@ -76,10 +78,13 @@ function requireOwner(projectId, user, res) {
 function loadProject(id, user) {
   const row = db
     .prepare(
-      `SELECT projects.*, users.username AS author, thumb.public_url AS thumbnail_url
+      `SELECT projects.*, users.username AS author, thumb.public_url AS thumbnail_url,
+              original.title AS remix_of_title, original_author.username AS remix_of_author
        FROM projects
        JOIN users ON users.id = projects.author_id
        LEFT JOIN assets AS thumb ON thumb.id = projects.thumbnail_asset_id
+       LEFT JOIN projects AS original ON original.id = projects.remix_of_project_id
+       LEFT JOIN users AS original_author ON original_author.id = original.author_id
        WHERE projects.id = ?`
     )
     .get(id);
@@ -209,13 +214,54 @@ app.post("/api/projects/import", requireUser, uploadProjectFile.single("project"
   }
 });
 
+app.post("/api/projects/:id/remix", requireUser, (req, res) => {
+  const original = db.prepare("SELECT * FROM projects WHERE id = ?").get(req.params.id);
+  if (!validateProjectAccess(original, req.user, res)) return;
+  const originalAssets = db.prepare("SELECT * FROM assets WHERE project_id = ?").all(original.id);
+  const data = JSON.parse(original.data_json);
+  const result = db
+    .prepare("INSERT INTO projects (author_id, title, description, data_json, published, remix_of_project_id) VALUES (?, ?, ?, ?, 0, ?)")
+    .run(req.user.id, `Remix of ${original.title}`.slice(0, 80), original.description, JSON.stringify(data), original.id);
+  const remixId = result.lastInsertRowid;
+  const assetIdMap = new Map();
+
+  for (const asset of originalAssets) {
+    const ext = path.extname(asset.file_path) || path.extname(asset.public_url) || ".png";
+    const newName = `${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`;
+    const newPath = path.join(uploadDir, newName);
+    if (!fs.existsSync(asset.file_path)) continue;
+    fs.copyFileSync(asset.file_path, newPath);
+    const inserted = db
+      .prepare("INSERT INTO assets (project_id, kind, name, mime_type, file_path, public_url) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(remixId, asset.kind, asset.name, asset.mime_type, newPath, `/uploads/${newName}`);
+    assetIdMap.set(asset.id, inserted.lastInsertRowid);
+  }
+
+  if (data.stage?.backgroundAssetId) {
+    data.stage.backgroundAssetId = assetIdMap.get(data.stage.backgroundAssetId) || null;
+  }
+  for (const sprite of data.sprites || []) {
+    if (sprite.costumeAssetId) sprite.costumeAssetId = assetIdMap.get(sprite.costumeAssetId) || null;
+  }
+  const thumbnailAssetId = original.thumbnail_asset_id ? assetIdMap.get(original.thumbnail_asset_id) || null : null;
+  db.prepare("UPDATE projects SET data_json = ?, thumbnail_asset_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(
+    JSON.stringify(data),
+    thumbnailAssetId,
+    remixId
+  );
+  res.status(201).json({ project: loadProject(remixId, req.user) });
+});
+
 app.get("/api/projects/:id", (req, res) => {
   const row = db
     .prepare(
-      `SELECT projects.*, users.username AS author, thumb.public_url AS thumbnail_url
+      `SELECT projects.*, users.username AS author, thumb.public_url AS thumbnail_url,
+              original.title AS remix_of_title, original_author.username AS remix_of_author
        FROM projects
        JOIN users ON users.id = projects.author_id
        LEFT JOIN assets AS thumb ON thumb.id = projects.thumbnail_asset_id
+       LEFT JOIN projects AS original ON original.id = projects.remix_of_project_id
+       LEFT JOIN users AS original_author ON original_author.id = original.author_id
        WHERE projects.id = ?`
     )
     .get(req.params.id);
