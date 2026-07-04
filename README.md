@@ -20,7 +20,7 @@ ScriptCraft is a Scratch-like creative coding platform for browser-based sprite 
 
 ## Local development
 
-1. Install Node.js 20 or newer.
+1. Install Node.js 20 LTS.
 2. Copy the environment file:
 
    ```bash
