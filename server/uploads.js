@@ -44,6 +44,11 @@ export const uploadImage = multer({
   }
 });
 
+export const uploadProjectFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
+});
+
 export function removeAssetFile(filePath) {
   if (!filePath) return;
   fs.unlink(filePath, () => {});

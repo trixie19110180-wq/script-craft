@@ -2,12 +2,19 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Brush,
+  ArrowDown,
+  ArrowUp,
+  Camera,
   Code2,
+  Copy,
+  Download,
   Eye,
   FolderOpen,
   Image,
   LogIn,
   LogOut,
+  Maximize2,
+  Minimize2,
   Play,
   Plus,
   Save,
@@ -15,6 +22,7 @@ import {
   Upload,
   User
 } from "lucide-react";
+import { convertScript, downloadProjectFile } from "./projectFiles.js";
 import { createRuntime, defaultScripts } from "./runtime.js";
 import "./styles.css";
 
@@ -36,6 +44,7 @@ const api = {
   projects: (mine = false) => api.request(`/api/projects${mine ? "?mine=1" : ""}`),
   project: (id) => api.request(`/api/projects/${id}`),
   createProject: (body) => api.request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
+  importProject: (form) => api.request("/api/projects/import", { method: "POST", body: form }),
   saveProject: (id, body) => api.request(`/api/projects/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteProject: (id) => api.request(`/api/projects/${id}`, { method: "DELETE" }),
   uploadAsset: (id, form) => api.request(`/api/projects/${id}/assets`, { method: "POST", body: form }),
@@ -199,21 +208,7 @@ function Browse({ user, openAuth, setMessage }) {
           <h1>Explore projects</h1>
           <p>Play shared ScriptCraft projects made with sprites, images, and code.</p>
         </div>
-        <button
-          className="primary"
-          onClick={async () => {
-            if (!user) {
-              openAuth();
-              return;
-            }
-            const data = await api.createProject({ title: "Untitled Project" });
-            setMessage("Project created.");
-            navigate(`/editor/${data.project.id}`);
-          }}
-        >
-          <Plus size={17} />
-          New Project
-        </button>
+        <CreateProjectActions user={user} openAuth={openAuth} setMessage={setMessage} />
       </div>
       {loading ? <p className="muted">Loading projects...</p> : <ProjectGrid projects={projects} empty="No published projects yet." />}
     </section>
@@ -247,21 +242,65 @@ function Studio({ user, openAuth, setMessage }) {
           <h1>My Studio</h1>
           <p>Create, edit, publish, or delete your projects.</p>
         </div>
-        <button
-          className="primary"
-          onClick={async () => {
-            const title = prompt("Project title", "Untitled Project") || "Untitled Project";
-            const data = await api.createProject({ title });
-            setMessage("Project created.");
-            navigate(`/editor/${data.project.id}`);
-          }}
-        >
-          <Plus size={17} />
-          New Project
-        </button>
+        <CreateProjectActions user={user} openAuth={openAuth} setMessage={setMessage} />
       </div>
       {loading ? <p className="muted">Loading studio...</p> : <ProjectGrid projects={projects} owner empty="You have not created any projects yet." onChanged={load} />}
     </section>
+  );
+}
+
+function CreateProjectActions({ user, openAuth, setMessage }) {
+  const inputRef = useRef(null);
+
+  async function createProject() {
+    if (!user) {
+      openAuth();
+      return;
+    }
+    const title = prompt("Project title", "Untitled Project") || "Untitled Project";
+    const data = await api.createProject({ title });
+    setMessage("Project created.");
+    navigate(`/editor/${data.project.id}`);
+  }
+
+  async function importProject(file) {
+    if (!user) {
+      openAuth();
+      return;
+    }
+    if (!file) return;
+    const form = new FormData();
+    form.append("project", file);
+    try {
+      const data = await api.importProject(form);
+      setMessage("Project imported.");
+      navigate(`/editor/${data.project.id}`);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  return (
+    <div className="toolbar">
+      <button className="primary" onClick={createProject}>
+        <Plus size={17} />
+        New Project
+      </button>
+      <button onClick={() => (user ? inputRef.current?.click() : openAuth())}>
+        <Upload size={17} />
+        Import
+      </button>
+      <input
+        ref={inputRef}
+        className="hidden-input"
+        type="file"
+        accept=".sb3,.ent,.scriptcraft,.json"
+        onChange={(event) => {
+          importProject(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
+    </div>
   );
 }
 
@@ -361,6 +400,9 @@ function Editor({ id, user, setMessage }) {
   }, [id]);
 
   const selectedSprite = project?.data.sprites.find((sprite) => sprite.id === selectedSpriteId);
+  const backgroundAssets = project?.assets.filter((asset) => asset.kind === "background") || [];
+  const thumbnailAssets = project?.assets.filter((asset) => asset.kind === "thumbnail") || [];
+  const currentThumbnail = project?.assets.find((asset) => asset.id === project.thumbnailAssetId);
 
   function updateProject(mutator) {
     setProject((current) => {
@@ -408,6 +450,35 @@ function Editor({ id, user, setMessage }) {
           <textarea rows="4" value={project.description} onChange={(event) => updateProject((draft) => (draft.description = event.target.value))} />
         </label>
         <label>
+          Visibility
+          <select value={project.published ? "published" : "draft"} onChange={(event) => updateProject((draft) => (draft.published = event.target.value === "published"))}>
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+          </select>
+        </label>
+        <div className="grid-two">
+          <label>
+            Stage width
+            <input
+              type="number"
+              min="240"
+              max="1280"
+              value={project.data.stage.width}
+              onChange={(event) => updateProject((draft) => (draft.data.stage.width = Number(event.target.value) || 640))}
+            />
+          </label>
+          <label>
+            Stage height
+            <input
+              type="number"
+              min="180"
+              max="720"
+              value={project.data.stage.height}
+              onChange={(event) => updateProject((draft) => (draft.data.stage.height = Number(event.target.value) || 360))}
+            />
+          </label>
+        </div>
+        <label>
           Stage color
           <input
             type="color"
@@ -415,6 +486,57 @@ function Editor({ id, user, setMessage }) {
             onChange={(event) => updateProject((draft) => (draft.data.stage.backgroundColor = event.target.value))}
           />
         </label>
+        <label>
+          Background image
+          <select value={project.data.stage.backgroundAssetId || ""} onChange={(event) => updateProject((draft) => (draft.data.stage.backgroundAssetId = Number(event.target.value) || null))}>
+            <option value="">Stage color only</option>
+            {backgroundAssets.map((asset) => (
+              <option value={asset.id} key={asset.id}>
+                {asset.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Project thumbnail
+          <select value={project.thumbnailAssetId || ""} onChange={(event) => updateProject((draft) => (draft.thumbnailAssetId = Number(event.target.value) || null))}>
+            <option value="">No thumbnail</option>
+            {thumbnailAssets.map((asset) => (
+              <option value={asset.id} key={asset.id}>
+                {asset.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="thumbnail-preview">
+          {currentThumbnail ? <img src={currentThumbnail.url} alt="" /> : <span>{project.title.slice(0, 1).toUpperCase()}</span>}
+        </div>
+        <dl className="project-facts">
+          <div>
+            <dt>Author</dt>
+            <dd>{project.author}</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{project.published ? "Published" : "Draft"}</dd>
+          </div>
+          <div>
+            <dt>Sprites</dt>
+            <dd>{project.data.sprites.length}</dd>
+          </div>
+          <div>
+            <dt>Assets</dt>
+            <dd>{project.assets.length}</dd>
+          </div>
+          <div>
+            <dt>Created</dt>
+            <dd>{new Date(project.createdAt).toLocaleDateString()}</dd>
+          </div>
+          <div>
+            <dt>Updated</dt>
+            <dd>{new Date(project.updatedAt).toLocaleDateString()}</dd>
+          </div>
+        </dl>
         <div className="toolbar">
           <button className="primary" onClick={() => save()} disabled={saving}>
             <Save size={17} />
@@ -429,6 +551,29 @@ function Editor({ id, user, setMessage }) {
           >
             <Eye size={17} />
             {project.published ? "Unpublish" : "Publish"}
+          </button>
+          <button
+            onClick={() => {
+              updateProject((draft) => (draft.thumbnailAssetId = null));
+              save({ thumbnailAssetId: null });
+            }}
+          >
+            Clear thumbnail
+          </button>
+        </div>
+        <div className="toolbar">
+          <button
+            onClick={async () => {
+              try {
+                await downloadProjectFile(project);
+                setMessage("Project exported.");
+              } catch (err) {
+                setMessage(err.message);
+              }
+            }}
+          >
+            <Download size={17} />
+            Export
           </button>
         </div>
 
@@ -459,7 +604,28 @@ function Editor({ id, user, setMessage }) {
             });
             setSelectedSpriteId(project.data.sprites.find((sprite) => sprite.id !== spriteId)?.id || "");
           }}
+          onDuplicate={(spriteId) => {
+            const original = project.data.sprites.find((sprite) => sprite.id === spriteId);
+            if (!original) return;
+            const copy = structuredClone(original);
+            copy.id = `sprite-${Date.now()}`;
+            copy.name = `${original.name} copy`;
+            copy.x += 24;
+            copy.y += 24;
+            updateProject((draft) => draft.data.sprites.push(copy));
+            setSelectedSpriteId(copy.id);
+          }}
+          onMove={(spriteId, direction) => {
+            updateProject((draft) => {
+              const index = draft.data.sprites.findIndex((sprite) => sprite.id === spriteId);
+              const next = index + direction;
+              if (index < 0 || next < 0 || next >= draft.data.sprites.length) return;
+              const [sprite] = draft.data.sprites.splice(index, 1);
+              draft.data.sprites.splice(next, 0, sprite);
+            });
+          }}
         />
+        <VariablePanel project={project} updateProject={updateProject} />
       </aside>
 
       <section className="stage-column">
@@ -493,7 +659,7 @@ function Editor({ id, user, setMessage }) {
   );
 }
 
-function SpriteList({ sprites, selectedSpriteId, onSelect, onAdd, onDelete }) {
+function SpriteList({ sprites, selectedSpriteId, onSelect, onAdd, onDelete, onDuplicate, onMove }) {
   return (
     <div className="sprite-list">
       <div className="section-row">
@@ -505,7 +671,81 @@ function SpriteList({ sprites, selectedSpriteId, onSelect, onAdd, onDelete }) {
       {sprites.map((sprite) => (
         <div className={`sprite-row ${selectedSpriteId === sprite.id ? "selected" : ""}`} key={sprite.id}>
           <button onClick={() => onSelect(sprite.id)}>{sprite.name}</button>
+          <button className="icon" onClick={() => onMove(sprite.id, -1)} title="Move back">
+            <ArrowUp size={15} />
+          </button>
+          <button className="icon" onClick={() => onMove(sprite.id, 1)} title="Move forward">
+            <ArrowDown size={15} />
+          </button>
+          <button className="icon" onClick={() => onDuplicate(sprite.id)} title="Duplicate sprite">
+            <Copy size={15} />
+          </button>
           <button className="icon danger" onClick={() => onDelete(sprite.id)} title="Delete sprite">
+            <Trash2 size={15} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VariablePanel({ project, updateProject }) {
+  const variables = project.data.variables || [];
+  return (
+    <div className="sprite-list">
+      <div className="section-row">
+        <h2>Variables</h2>
+        <button
+          onClick={() =>
+            updateProject((draft) => {
+              draft.data.variables ||= [];
+              draft.data.variables.push({ id: `var-${Date.now()}`, name: `score${draft.data.variables.length || ""}`, value: 0, visible: true });
+            })
+          }
+          title="Add variable"
+        >
+          <Plus size={17} />
+        </button>
+      </div>
+      {variables.map((variable) => (
+        <div className="variable-row" key={variable.id}>
+          <input
+            value={variable.name}
+            onChange={(event) =>
+              updateProject((draft) => {
+                draft.data.variables.find((item) => item.id === variable.id).name = event.target.value;
+              })
+            }
+          />
+          <input
+            value={variable.value}
+            onChange={(event) =>
+              updateProject((draft) => {
+                draft.data.variables.find((item) => item.id === variable.id).value = event.target.value;
+              })
+            }
+          />
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={variable.visible !== false}
+              onChange={(event) =>
+                updateProject((draft) => {
+                  draft.data.variables.find((item) => item.id === variable.id).visible = event.target.checked;
+                })
+              }
+            />
+            Show
+          </label>
+          <button
+            className="icon danger"
+            onClick={() =>
+              updateProject((draft) => {
+                draft.data.variables = draft.data.variables.filter((item) => item.id !== variable.id);
+              })
+            }
+            title="Delete variable"
+          >
             <Trash2 size={15} />
           </button>
         </div>
@@ -549,6 +789,10 @@ function SpriteInspector({ sprite, project, updateProject }) {
           <input type="number" value={sprite.rotation} onChange={(event) => updateSprite((draft) => (draft.rotation = Number(event.target.value)))} />
         </label>
       </div>
+      <label className="check-row">
+        <input type="checkbox" checked={sprite.visible !== false} onChange={(event) => updateSprite((draft) => (draft.visible = event.target.checked))} />
+        Visible on stage
+      </label>
       <label>
         Sprite color
         <input type="color" value={sprite.color} onChange={(event) => updateSprite((draft) => (draft.color = event.target.value))} />
@@ -570,8 +814,9 @@ function SpriteInspector({ sprite, project, updateProject }) {
           value={sprite.script.language}
           onChange={(event) =>
             updateSprite((draft) => {
-              draft.script.language = event.target.value;
-              draft.script.code = defaultScripts[event.target.value];
+              const nextLanguage = event.target.value;
+              draft.script.code = convertScript(draft.script.code, draft.script.language, nextLanguage);
+              draft.script.language = nextLanguage;
             })
           }
         >
@@ -589,7 +834,60 @@ function SpriteInspector({ sprite, project, updateProject }) {
           onChange={(event) => updateSprite((draft) => (draft.script.code = event.target.value))}
         />
       </label>
+      <BuiltInReference
+        language={sprite.script.language}
+        onInsert={(snippet) =>
+          updateSprite((draft) => {
+            draft.script.code = `${draft.script.code.trimEnd()}\n${snippet}`;
+          })
+        }
+      />
     </>
+  );
+}
+
+const builtIns = [
+  { name: "move", args: "steps", description: "Move in the sprite direction.", js: "move(10);", python: "move(10)", c: "move(10);" },
+  { name: "turn", args: "degrees", description: "Rotate the sprite.", js: "turn(15);", python: "turn(15)", c: "turn(15);" },
+  { name: "goTo", args: "x, y", description: "Place the sprite.", js: "goTo(320, 180);", python: "go_to(320, 180)", c: "goTo(320, 180);" },
+  { name: "changeX", args: "amount", description: "Move horizontally.", js: "changeX(4);", python: "change_x(4)", c: "changeX(4);" },
+  { name: "changeY", args: "amount", description: "Move vertically.", js: "changeY(-4);", python: "change_y(-4)", c: "changeY(-4);" },
+  { name: "setSize", args: "pixels", description: "Set sprite size.", js: "setSize(80);", python: "set_size(80)", c: "setSize(80);" },
+  { name: "say", args: "text, seconds", description: "Show a speech bubble.", js: "say(\"Hello\", 1.5);", python: "say(\"Hello\", 1.5)", c: "say(\"Hello\", 1.5);" },
+  { name: "show / hide", args: "", description: "Toggle sprite visibility.", js: "show();\nhide();", python: "show()\nhide()", c: "show();\nhide();" },
+  { name: "key", args: "name", description: "Check a keyboard key.", js: "if (key(\"ArrowRight\")) {\n  changeX(4);\n}", python: "if key(\"ArrowRight\"):\n    change_x(4)", c: "if (key(\"ArrowRight\")) {\n  changeX(4);\n}" },
+  { name: "random", args: "min, max", description: "Pick a random number.", js: "goTo(random(0, 640), random(0, 360));", python: "go_to(random(0, 640), random(0, 360))", c: "goTo(random(0, 640), random(0, 360));" },
+  { name: "touchingEdge", args: "", description: "Check stage edge.", js: "if (touchingEdge()) {\n  turn(180);\n}", python: "if touching_edge():\n    turn(180)", c: "if (touchingEdge()) {\n  turn(180);\n}" },
+  { name: "bounceOnEdge", args: "", description: "Keep sprite on stage.", js: "bounceOnEdge();", python: "bounce_on_edge()", c: "bounceOnEdge();" },
+  { name: "getVar", args: "name", description: "Read a variable.", js: "const score = getVar(\"score\");", python: "score = get_var(\"score\")", c: "float score = getVar(\"score\");" },
+  { name: "setVar", args: "name, value", description: "Set a variable.", js: "setVar(\"score\", 0);", python: "set_var(\"score\", 0)", c: "setVar(\"score\", 0);" },
+  { name: "changeVar", args: "name, amount", description: "Change a variable.", js: "changeVar(\"score\", 1);", python: "change_var(\"score\", 1)", c: "changeVar(\"score\", 1);" }
+];
+
+function BuiltInReference({ language, onInsert }) {
+  return (
+    <div className="builtins">
+      <div className="section-row">
+        <h2>Built-ins</h2>
+      </div>
+      <div className="builtin-grid">
+        {builtIns.map((item) => (
+          <article key={item.name} className="builtin-card">
+            <div>
+              <strong>
+                {item.name}
+                {item.args ? `(${item.args})` : ""}
+              </strong>
+              <span>{item.description}</span>
+            </div>
+            <button onClick={() => onInsert(`\n${item[language]}\n`)}>
+              <Plus size={14} />
+              Insert
+            </button>
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -646,7 +944,19 @@ function AssetPanel({ project, assetKind, setAssetKind, onUploaded, onApply, set
             </div>
             <button onClick={() => onApply(asset)}>
               <Image size={16} />
-              Use
+              {asset.kind === "background" ? "Set background" : asset.kind === "thumbnail" ? "Set thumbnail" : "Use as costume"}
+            </button>
+            <button
+              className="danger"
+              onClick={async () => {
+                await api.deleteAsset(project.id, asset.id);
+                const data = await api.project(project.id);
+                onUploaded(data.project);
+                setMessage("Asset deleted.");
+              }}
+            >
+              <Trash2 size={16} />
+              Delete
             </button>
           </article>
         ))}
@@ -739,9 +1049,11 @@ function DrawingTool({ onSave }) {
 }
 
 function Stage({ project, editable = false, selectedSpriteId, onProjectChange, playing = false, showControls = false, setMessage }) {
+  const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const runtimeRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(playing);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [runtimeError, setRuntimeError] = useState("");
   const assetMap = useMemo(() => Object.fromEntries(project.assets.map((asset) => [asset.id, asset.url])), [project.assets]);
 
@@ -764,8 +1076,39 @@ function Stage({ project, editable = false, selectedSpriteId, onProjectChange, p
     else runtimeRef.current.stop();
   }, [isPlaying]);
 
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === wrapRef.current);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  async function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      await wrapRef.current?.requestFullscreen?.();
+    } else {
+      await document.exitFullscreen?.();
+    }
+  }
+
+  function captureThumbnail() {
+    canvasRef.current?.toBlob(async (blob) => {
+      if (!blob) return;
+      const form = new FormData();
+      form.append("image", new File([blob], `stage-${Date.now()}.png`, { type: "image/png" }));
+      form.append("kind", "thumbnail");
+      form.append("name", "Stage thumbnail");
+      try {
+        const data = await api.uploadAsset(project.id, form);
+        onProjectChange?.(data.project);
+        setMessage?.("Thumbnail captured.");
+      } catch (err) {
+        setMessage?.(err.message);
+      }
+    }, "image/png");
+  }
+
   return (
-    <div className="stage-wrap">
+    <div className="stage-wrap" ref={wrapRef}>
       <div className="stage-top">
         <div>
           <h2>Stage</h2>
@@ -777,6 +1120,16 @@ function Stage({ project, editable = false, selectedSpriteId, onProjectChange, p
               <Play size={17} />
               {isPlaying ? "Stop" : "Play"}
             </button>
+            <button onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+              {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+              {isFullscreen ? "Exit" : "Fullscreen"}
+            </button>
+            {editable && (
+              <button onClick={captureThumbnail}>
+                <Camera size={17} />
+                Thumbnail
+              </button>
+            )}
           </div>
         )}
       </div>

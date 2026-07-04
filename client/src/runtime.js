@@ -83,6 +83,7 @@ function compile(script) {
 export function createRuntime(canvas, initialData, assets, hooks = {}) {
   const ctx = canvas.getContext("2d");
   let data = structuredClone(initialData);
+  data.variables ||= [];
   let raf = null;
   let last = performance.now();
   let programs = [];
@@ -149,6 +150,18 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
       random(min, max) {
         return Number(min) + Math.random() * (Number(max) - Number(min));
       },
+      getVar(name) {
+        return data.variables.find((item) => item.name === name)?.value ?? 0;
+      },
+      setVar(name, value) {
+        const variable = data.variables.find((item) => item.name === name);
+        if (variable) variable.value = value;
+        else data.variables.push({ id: `var-${Date.now()}`, name: String(name), value });
+      },
+      changeVar(name, amount) {
+        const current = Number(this.getVar(name) || 0);
+        this.setVar(name, current + Number(amount || 0));
+      },
       touchingEdge() {
         return sprite.x < 0 || sprite.y < 0 || sprite.x > data.stage.width || sprite.y > data.stage.height;
       },
@@ -203,6 +216,25 @@ export function createRuntime(canvas, initialData, assets, hooks = {}) {
         ctx.fillText(line.text, sprite.x + 31, sprite.y - 24);
       }
     }
+
+    ctx.font = "13px system-ui";
+    data.variables
+      .filter((variable) => variable.visible)
+      .forEach((variable, index) => {
+        const text = `${variable.name}: ${variable.value}`;
+        const width = Math.max(90, ctx.measureText(text).width + 18);
+        const x = 10;
+        const y = 12 + index * 30;
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.strokeStyle = "#aebbd0";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x, y, width, 22, 6);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#18202f";
+        ctx.fillText(text, x + 9, y + 15);
+      });
   }
 
   function buildPrograms() {

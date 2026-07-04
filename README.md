@@ -9,6 +9,14 @@ ScriptCraft is a Scratch-like creative coding platform for browser-based sprite 
 - Stage, sprites, costumes, backgrounds, thumbnails, and project metadata.
 - Safe image upload handling for PNG, JPEG, WebP, GIF, and SVG files.
 - Built-in drawing tool that saves drawings as project image assets.
+- Fullscreen project playback.
+- In-editor built-in function reference with insert buttons.
+- Variables with stage monitors and runtime commands.
+- Sprite duplicate, visibility, and layer-order controls.
+- Stage thumbnail capture from the editor.
+- ScriptCraft `.scriptcraft` export/import with embedded image assets.
+- Scratch `.sb3` and Entry `.ent` imports for stages, sprites, costumes, backgrounds, positions, and editable imported-code stubs.
+- JavaScript, Python-style, and C-style code switching with common ScriptCraft API conversion.
 - SQLite schema initialized automatically on startup.
 - Render deployment config with a persistent disk for the database and uploads.
 
@@ -140,3 +148,14 @@ void update(float dt) {
 ```
 
 Available commands include `move`, `turn`, `goTo`, `setX`, `setY`, `changeX`, `changeY`, `setSize`, `say`, `show`, `hide`, `key`, `random`, `touchingEdge`, and `bounceOnEdge`.
+
+## Project files
+
+ScriptCraft can import:
+
+- `.scriptcraft` files exported from ScriptCraft.
+- `.sb3` Scratch 3 projects. Image costumes and backdrops are imported, and block scripts are summarized in editable JavaScript stubs.
+- `.ent` Entry projects saved as gzip packages. Objects, pictures, and the selected stage picture are imported, and block scripts are summarized in editable JavaScript stubs.
+- `.json` ScriptCraft export JSON.
+
+Use **Export** inside the editor to download a portable `.scriptcraft` file that includes the project data and embedded image assets.

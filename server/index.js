@@ -4,7 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { attachUser, clearSession, createSession, hashPassword, publicUser, requireUser, verifyPassword } from "./auth.js";
 import { assetFromRow, db, projectFromRow, projectSummary } from "./db.js";
-import { removeAssetFile, uploadDir, uploadImage } from "./uploads.js";
+import { importEntryEnt, importScratchSb3, importScriptCraft } from "./importers.js";
+import { removeAssetFile, uploadDir, uploadImage, uploadProjectFile } from "./uploads.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -180,6 +181,32 @@ app.post("/api/projects", requireUser, (req, res) => {
     .prepare("INSERT INTO projects (author_id, title, description, data_json) VALUES (?, ?, ?, ?)")
     .run(req.user.id, title, description, JSON.stringify(defaultProjectData));
   res.status(201).json({ project: loadProject(result.lastInsertRowid, req.user) });
+});
+
+app.post("/api/projects/import", requireUser, uploadProjectFile.single("project"), (req, res) => {
+  if (!req.file) {
+    res.status(400).json({ error: "Choose a Scratch, Entry, or ScriptCraft project file." });
+    return;
+  }
+
+  try {
+    const filename = req.file.originalname || "Imported Project";
+    const lower = filename.toLowerCase();
+    let projectId;
+    if (lower.endsWith(".sb3")) {
+      projectId = importScratchSb3(req.user.id, req.file.buffer, filename);
+    } else if (lower.endsWith(".ent")) {
+      projectId = importEntryEnt(req.user.id, req.file.buffer, filename);
+    } else if (lower.endsWith(".scriptcraft") || lower.endsWith(".json")) {
+      projectId = importScriptCraft(req.user.id, req.file.buffer.toString("utf8"));
+    } else {
+      res.status(400).json({ error: "Supported files: .sb3, .ent, .scriptcraft, and .json." });
+      return;
+    }
+    res.status(201).json({ project: loadProject(projectId, req.user) });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not import that project." });
+  }
 });
 
 app.get("/api/projects/:id", (req, res) => {
