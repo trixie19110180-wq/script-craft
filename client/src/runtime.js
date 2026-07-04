@@ -92,14 +92,75 @@ function compile(script) {
     script.language === "python" ? transpilePython(script.code) : script.language === "c" ? transpileC(script.code) : script.code;
   return new Function(
     "api",
-    `with (api) {
-      ${source}
-      return {
-        start: typeof start === "function" ? start : null,
-        update: typeof update === "function" ? update : null,
-        onMessage: typeof onMessage === "function" ? onMessage : null
+    `
+      const move = (...args) => api.move(...args);
+      const turn = (...args) => api.turn(...args);
+      const setRotation = (...args) => api.setRotation(...args);
+      const pointInDirection = (...args) => api.pointInDirection(...args);
+      const pointTowards = (...args) => api.pointTowards(...args);
+      const goTo = (...args) => api.goTo(...args);
+      const setX = (...args) => api.setX(...args);
+      const setY = (...args) => api.setY(...args);
+      const changeX = (...args) => api.changeX(...args);
+      const changeY = (...args) => api.changeY(...args);
+      const setSize = (...args) => api.setSize(...args);
+      const setColor = (...args) => api.setColor(...args);
+      const say = (...args) => api.say(...args);
+      const show = (...args) => api.show(...args);
+      const hide = (...args) => api.hide(...args);
+      const key = (...args) => api.key(...args);
+      const log = (...args) => api.log(...args);
+      const random = (...args) => api.random(...args);
+      const timer = (...args) => api.timer(...args);
+      const resetTimer = (...args) => api.resetTimer(...args);
+      const distanceTo = (...args) => api.distanceTo(...args);
+      const touchingSprite = (...args) => api.touchingSprite(...args);
+      const touchingMouse = (...args) => api.touchingMouse(...args);
+      const getVar = (...args) => api.getVar(...args);
+      const setVar = (...args) => api.setVar(...args);
+      const changeVar = (...args) => api.changeVar(...args);
+      const broadcast = (...args) => api.broadcast(...args);
+      const penDown = (...args) => api.penDown(...args);
+      const penUp = (...args) => api.penUp(...args);
+      const setPenColor = (...args) => api.setPenColor(...args);
+      const setPenSize = (...args) => api.setPenSize(...args);
+      const clearPen = (...args) => api.clearPen(...args);
+      const touchingEdge = (...args) => api.touchingEdge(...args);
+      const bounceOnEdge = (...args) => api.bounceOnEdge(...args);
+      const console = api.console;
+      let x = api.x;
+      let y = api.y;
+      let direction = api.direction;
+      let mouseX = api.mouseX;
+      let mouseY = api.mouseY;
+      let mouseDown = api.mouseDown;
+      const __syncBuiltIns = () => {
+        x = api.x;
+        y = api.y;
+        direction = api.direction;
+        mouseX = api.mouseX;
+        mouseY = api.mouseY;
+        mouseDown = api.mouseDown;
       };
-    }`
+      ${source}
+      const __start = typeof start === "function" ? start : null;
+      const __update = typeof update === "function" ? update : null;
+      const __onMessage = typeof onMessage === "function" ? onMessage : null;
+      return {
+        start: __start ? (...args) => {
+          __syncBuiltIns();
+          return __start(...args);
+        } : null,
+        update: __update ? (...args) => {
+          __syncBuiltIns();
+          return __update(...args);
+        } : null,
+        onMessage: __onMessage ? (...args) => {
+          __syncBuiltIns();
+          return __onMessage(...args);
+        } : null
+      };
+    `
   );
 }
 
