@@ -73,7 +73,7 @@ The production server serves the built React app and the API from the same port.
 | `NODE_ENV` | Use `production` on Render | `development` |
 | `DB_PATH` | SQLite database path | `server/data/scriptcraft.sqlite` |
 | `UPLOAD_DIR` | Uploaded image directory | `server/uploads` |
-| `DATABASE_URL` | Supabase/Postgres connection string. Overrides SQLite when set. | empty |
+| `DATABASE_URL` | Supabase/Postgres pooler connection string. Overrides SQLite when set. | empty |
 | `DATABASE_SSL` | Use SSL for hosted Postgres | `true` |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name for persistent image storage | empty |
 | `CLOUDINARY_API_KEY` | Cloudinary API key | empty |
@@ -103,7 +103,7 @@ This repo includes `render.yaml`.
    - Start command: `npm start`
 5. Add these production environment values:
    - `NODE_ENV=production`
-   - `DATABASE_URL=<your Supabase pooled connection string>`
+   - `DATABASE_URL=<your Supabase Supavisor/Pooler connection string>`
    - `DATABASE_SSL=true`
    - `CLOUDINARY_CLOUD_NAME=<your Cloudinary cloud name>`
    - `CLOUDINARY_API_KEY=<your Cloudinary API key>`
@@ -112,7 +112,7 @@ This repo includes `render.yaml`.
    - `SESSION_DAYS=14`
    - `MAX_UPLOAD_MB=8`
 
-With `DATABASE_URL` and Cloudinary configured, Render Free restarts and deploys keep accounts, projects, scripts, sessions, remixes, and uploaded images. Without those variables, local SQLite/upload storage is used and Render Free data can be lost when the service restarts.
+Use the Supabase **Pooler** connection string on Render Free, not the direct `db.<project>.supabase.co:5432` string. Supabase direct database URLs can resolve to IPv6, which Render cannot reach in this setup. With `DATABASE_URL` and Cloudinary configured, Render Free restarts and deploys keep accounts, projects, scripts, sessions, remixes, and uploaded images. Without those variables, local SQLite/upload storage is used and Render Free data can be lost when the service restarts.
 
 ## GitHub upload
 

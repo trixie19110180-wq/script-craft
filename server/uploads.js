@@ -22,7 +22,7 @@ function writableUploadDir() {
   }
 }
 
-export const uploadDir = writableUploadDir();
+export const uploadDir = useCloudinary ? path.join(os.tmpdir(), "scriptcraft", "uploads") : writableUploadDir();
 
 const allowedTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 8);
