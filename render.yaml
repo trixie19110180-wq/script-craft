@@ -8,17 +8,19 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DB_PATH
-        value: /var/data/scriptcraft.sqlite
-      - key: UPLOAD_DIR
-        value: /var/data/uploads
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
       - key: SESSION_COOKIE_NAME
         value: scriptcraft_session
       - key: SESSION_DAYS
         value: 14
       - key: MAX_UPLOAD_MB
         value: 8
-    disk:
-      name: scriptcraft-data
-      mountPath: /var/data
-      sizeGB: 1

@@ -22,6 +22,7 @@ import {
   Play,
   Plus,
   Save,
+  Sparkles,
   Square,
   Trash2,
   Upload,
@@ -881,6 +882,7 @@ function VariablePanel({ project, updateProject }) {
 function SpriteInspector({ mode = "all", sprite, project, updateProject, setMessage }) {
   const costumeAssets = project.assets.filter((asset) => ["sprite", "costume"].includes(asset.kind));
   const [showBuiltIns, setShowBuiltIns] = useState(false);
+  const [showCoach, setShowCoach] = useState(false);
   const [codeDraft, setCodeDraft] = useState(sprite.script.code);
   const [codeDirty, setCodeDirty] = useState(false);
   const updateSprite = (mutator) =>
@@ -1032,8 +1034,13 @@ function SpriteInspector({ mode = "all", sprite, project, updateProject, setMess
               <Code2 size={17} />
               {showBuiltIns ? "Hide Functions" : "Info for Functions"}
             </button>
+            <button onClick={() => setShowCoach((value) => !value)}>
+              <Sparkles size={17} />
+              {showCoach ? "Hide AI Help" : "AI Help"}
+            </button>
             {codeDirty && <span className="inline-status">Applies after 2000 ms idle</span>}
           </div>
+          {showCoach && <CodeCoach code={codeDraft} language={sprite.script.language} target="sprite" />}
           {showBuiltIns && (
             <BuiltInReference
               language={sprite.script.language}
@@ -1052,6 +1059,7 @@ function SpriteInspector({ mode = "all", sprite, project, updateProject, setMess
 function BackgroundInspector({ project, updateProject, setMessage }) {
   const script = project.data.stage.script || { language: "javascript", code: defaultBackgroundScripts.javascript };
   const [showBuiltIns, setShowBuiltIns] = useState(false);
+  const [showCoach, setShowCoach] = useState(false);
   const [codeDraft, setCodeDraft] = useState(script.code);
   const [codeDirty, setCodeDirty] = useState(false);
 
@@ -1140,8 +1148,13 @@ function BackgroundInspector({ project, updateProject, setMessage }) {
           <Code2 size={17} />
           {showBuiltIns ? "Hide Functions" : "Info for Functions"}
         </button>
+        <button onClick={() => setShowCoach((value) => !value)}>
+          <Sparkles size={17} />
+          {showCoach ? "Hide AI Help" : "AI Help"}
+        </button>
         {codeDirty && <span className="inline-status">Applies after 2000 ms idle</span>}
       </div>
+      {showCoach && <CodeCoach code={codeDraft} language={script.language} target="background" />}
       {showBuiltIns && (
         <BuiltInReference
           language={script.language}
@@ -1153,6 +1166,65 @@ function BackgroundInspector({ project, updateProject, setMessage }) {
       )}
     </div>
   );
+}
+
+function CodeCoach({ code, language, target }) {
+  const tips = useMemo(() => analyzeCode(code, language, target), [code, language, target]);
+  return (
+    <div className="coach-panel">
+      <div className="section-row">
+        <h2>AI Help</h2>
+        <span>{tips.score}</span>
+      </div>
+      <div className="coach-grid">
+        {tips.items.map((item) => (
+          <article className={`coach-card ${item.level}`} key={item.title}>
+            <strong>{item.title}</strong>
+            <p>{item.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function analyzeCode(code, language, target) {
+  const text = String(code || "");
+  const items = [];
+  const add = (level, title, body) => items.push({ level, title, body });
+  const hasStart = language === "python" ? /\bdef\s+start\s*\(/.test(text) : /\b(start|void\s+start)\s*\(/.test(text);
+  const hasUpdate = language === "python" ? /\bdef\s+update\s*\(/.test(text) : /\b(update|void\s+update)\s*\(/.test(text);
+
+  if (!hasStart) add("warn", "Add start()", "Use start() for setup that should happen once when Play begins.");
+  if (!hasUpdate) add("warn", "Add update(dt)", "Use update(dt) for frame behavior. dt is milliseconds, so speed code should multiply by dt.");
+  if (/\bsay\s*\([^,\n]+,\s*(0\.\d+|1(\.0)?|1\.5|2(\.0)?)\s*\)/.test(text)) {
+    add("warn", "Use milliseconds", "ScriptCraft durations use milliseconds now. For example, use say(\"Hello\", 1500), not say(\"Hello\", 1.5).");
+  }
+  if (/\bchange[XY]\s*\(\s*[A-Za-z_$][\w$]*\s*\*\s*dt\s*\)/.test(text) && !/\/\s*1000/.test(text)) {
+    add("info", "Check speed units", "Because dt is milliseconds, pixels-per-second speeds should usually divide by 1000 before multiplying by dt.");
+  }
+  if (/\b(fetch|while\s*\(\s*true\s*\)|alert\s*\(|prompt\s*\()/i.test(text)) {
+    add("warn", "Avoid blocking the frame", "Long or blocking work inside update(dt) can freeze the stage. Keep update small and spread work across frames.");
+  }
+  if (target === "background" && /\b(move|changeX|changeY|goTo|setX|setY|bounceOnEdge)\s*\(/.test(text)) {
+    add("info", "Background has no sprite body", "Background code can use timers, variables, broadcasts, console logs, and setBackgroundColor(). Sprite movement commands only affect sprites.");
+  }
+  if (target === "sprite" && /\bsetBackgroundColor\s*\(/.test(text)) {
+    add("info", "Stage changes are global", "setBackgroundColor() works from sprite code too, but background code is usually the cleaner place for stage-wide behavior.");
+  }
+  if (/console\.log|log\s*\(/.test(text)) {
+    add("ok", "Console ready", "Logs appear under the stage console while the project is playing.");
+  } else {
+    add("info", "Use the console", "Add console.log(value) in JavaScript or log(value) in Python/C-style code to debug values while playing.");
+  }
+  if (!items.some((item) => item.level === "warn")) {
+    add("ok", "Looks runnable", "No common ScriptCraft mistakes were found. Press Play and watch the console for runtime logs.");
+  }
+
+  return {
+    score: items.some((item) => item.level === "warn") ? "Needs review" : "Clean",
+    items
+  };
 }
 
 const builtIns = [

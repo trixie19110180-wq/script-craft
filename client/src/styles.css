@@ -605,6 +605,55 @@ main {
   font-size: 0.76rem;
 }
 
+.coach-panel {
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f9fbff;
+  display: grid;
+  gap: 10px;
+}
+
+.coach-panel .section-row span {
+  color: #607089;
+  font-size: 0.82rem;
+}
+
+.coach-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.coach-card {
+  border: 1px solid #dbe3ef;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.coach-card.warn {
+  border-left-color: #b45309;
+}
+
+.coach-card.info {
+  border-left-color: #1565c0;
+}
+
+.coach-card.ok {
+  border-left-color: #16815b;
+}
+
+.coach-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.coach-card p {
+  color: #607089;
+  font-size: 0.86rem;
+}
+
 .assets {
   padding: 12px;
   overflow: auto;

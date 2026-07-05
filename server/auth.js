@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import { cleanupExpiredSessions, db } from "./db.js";
+import { cleanupExpiredSessions, get, run } from "./db.js";
 
 const cookieName = process.env.SESSION_COOKIE_NAME || "scriptcraft_session";
 const sessionDays = Number(process.env.SESSION_DAYS || 14);
@@ -39,7 +39,7 @@ function cookieOptions(req) {
 }
 
 export function publicUser(row) {
-  return row ? { id: row.id, username: row.username, createdAt: row.created_at, isAdmin: isAdminUser(row) } : null;
+  return row ? { id: Number(row.id), username: row.username, createdAt: row.created_at, isAdmin: isAdminUser(row) } : null;
 }
 
 export async function hashPassword(password) {
@@ -50,23 +50,23 @@ export async function verifyPassword(password, hash) {
   return bcrypt.compare(password, hash);
 }
 
-export function createSession(res, req, userId) {
-  cleanupExpiredSessions();
+export async function createSession(res, req, userId) {
+  await cleanupExpiredSessions();
   const id = crypto.randomBytes(32).toString("base64url");
-  const expires = new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19);
-  db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").run(id, userId, expires);
+  const expires = new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000).toISOString();
+  await run("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)", [id, userId, expires]);
   res.setHeader("Set-Cookie", `${cookieName}=${encodeURIComponent(id)}; ${cookieOptions(req)}`);
 }
 
-export function clearSession(req, res) {
+export async function clearSession(req, res) {
   const sid = parseCookies(req.headers.cookie || "")[cookieName];
   if (sid) {
-    db.prepare("DELETE FROM sessions WHERE id = ?").run(sid);
+    await run("DELETE FROM sessions WHERE id = ?", [sid]);
   }
   res.setHeader("Set-Cookie", `${cookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
 }
 
-export function attachUser(req, _res, next) {
+export async function attachUser(req, _res, next) {
   const sid = parseCookies(req.headers.cookie || "")[cookieName];
   if (!sid) {
     req.user = null;
@@ -74,14 +74,13 @@ export function attachUser(req, _res, next) {
     return;
   }
 
-  const row = db
-    .prepare(
-      `SELECT users.id, users.username, users.created_at
-       FROM sessions
-       JOIN users ON users.id = sessions.user_id
-       WHERE sessions.id = ? AND sessions.expires_at > datetime('now')`
-    )
-    .get(sid);
+  const row = await get(
+    `SELECT users.id, users.username, users.created_at
+     FROM sessions
+     JOIN users ON users.id = sessions.user_id
+     WHERE sessions.id = ? AND sessions.expires_at > datetime('now')`,
+    [sid]
+  );
 
   req.user = publicUser(row);
   next();

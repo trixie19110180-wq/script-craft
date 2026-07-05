@@ -19,12 +19,14 @@ ScriptCraft is a Scratch-like creative coding platform for browser-based sprite 
 - ScriptCraft `.scriptcraft` export/import with embedded image assets.
 - Scratch `.sb3` and Entry `.ent` imports for stages, sprites, costumes, backgrounds, positions, and editable imported-code stubs.
 - JavaScript, Python-style, and C-style code switching with common ScriptCraft API conversion.
-- SQLite schema initialized automatically on startup.
-- Render deployment config with a persistent disk for the database and uploads.
+- SQLite schema initialized automatically for local development.
+- Supabase Postgres support for persistent production users, projects, scripts, sessions, and app data.
+- Cloudinary support for persistent production sprites, costumes, backgrounds, thumbnails, and drawings.
+- Render deployment config for the free web service plan without relying on local disk persistence.
 
 ## Tech stack
 
-- Backend: Node.js, Express, SQLite via `better-sqlite3`, `bcryptjs`, and `multer`.
+- Backend: Node.js, Express, SQLite via `better-sqlite3` locally, Supabase/Postgres via `pg` in production, `bcryptjs`, and `multer`.
 - Frontend: React and Vite.
 - Runtime: project code runs in the visitor's browser, never on the server. JavaScript is executed directly. Python and C modes are intentionally small ScriptCraft subsets that compile common beginner commands to the browser runtime.
 
@@ -51,7 +53,7 @@ ScriptCraft is a Scratch-like creative coding platform for browser-based sprite 
 
 5. Open `http://localhost:5173`.
 
-The API runs on `http://localhost:3000` during development. Uploaded files are written to `server/uploads`, and the local database is written to `server/data/scriptcraft.sqlite`.
+The API runs on `http://localhost:3000` during development. By default, uploaded files are written to `server/uploads`, and the local database is written to `server/data/scriptcraft.sqlite`. Set `DATABASE_URL` and Cloudinary variables locally if you want to test the production storage path.
 
 ## Production build
 
@@ -71,6 +73,11 @@ The production server serves the built React app and the API from the same port.
 | `NODE_ENV` | Use `production` on Render | `development` |
 | `DB_PATH` | SQLite database path | `server/data/scriptcraft.sqlite` |
 | `UPLOAD_DIR` | Uploaded image directory | `server/uploads` |
+| `DATABASE_URL` | Supabase/Postgres connection string. Overrides SQLite when set. | empty |
+| `DATABASE_SSL` | Use SSL for hosted Postgres | `true` |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name for persistent image storage | empty |
+| `CLOUDINARY_API_KEY` | Cloudinary API key | empty |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret | empty |
 | `SESSION_COOKIE_NAME` | Browser session cookie name | `scriptcraft_session` |
 | `SESSION_DAYS` | Session lifetime | `14` |
 | `MAX_UPLOAD_MB` | Maximum uploaded image size | `8` |
@@ -94,14 +101,18 @@ This repo includes `render.yaml`.
 4. Use:
    - Build command: `npm install && npm run build`
    - Start command: `npm start`
-5. Keep these production environment values:
+5. Add these production environment values:
    - `NODE_ENV=production`
-   - `DB_PATH=/var/data/scriptcraft.sqlite`
-   - `UPLOAD_DIR=/var/data/uploads`
-6. Add a persistent disk mounted at `/var/data`.
+   - `DATABASE_URL=<your Supabase pooled connection string>`
+   - `DATABASE_SSL=true`
+   - `CLOUDINARY_CLOUD_NAME=<your Cloudinary cloud name>`
+   - `CLOUDINARY_API_KEY=<your Cloudinary API key>`
+   - `CLOUDINARY_API_SECRET=<your Cloudinary API secret>`
+   - `SESSION_COOKIE_NAME=scriptcraft_session`
+   - `SESSION_DAYS=14`
+   - `MAX_UPLOAD_MB=8`
 
-Without a persistent disk, the database and uploaded images can be lost when the service restarts.
-If you are using Render Free without a disk, remove `DB_PATH` and `UPLOAD_DIR` or leave the app fallback in place. The service will run from temporary storage, but saved accounts, projects, and images are ephemeral.
+With `DATABASE_URL` and Cloudinary configured, Render Free restarts and deploys keep accounts, projects, scripts, sessions, remixes, and uploaded images. Without those variables, local SQLite/upload storage is used and Render Free data can be lost when the service restarts.
 
 ## GitHub upload
 
